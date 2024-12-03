@@ -1,0 +1,65 @@
+name: checks
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ["**.md"]
+  pull_request:
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+
+jobs:
+  extract-toolchain:
+    name: Extract toolchain
+    runs-on: ubuntu-latest
+    outputs:
+      toolchain: ${{ steps.toolchain.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: sebrollen/toml-action@v1.2.0
+        id: toolchain
+        with:
+          file: rust-toolchain.toml
+          field: toolchain.channel
+      - run: echo "toolchain=${{ steps.toolchain.outputs.value || 'stable' }}" >> $GITHUB_OUTPUT
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    needs: extract-toolchain
+    env:
+      TOOLCHAIN: ${{ needs.extract-toolchain.outputs.toolchain }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.TOOLCHAIN }}
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+      - run: cargo clippy -- -D warnings
+
+  fmt:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rustfmt
+      - uses: swatinem/rust-cache@v2
+      - run: cargo +nightly fmt --all -- --check
+
+  test:
+    name: Test
+    needs: extract-toolchain
+    runs-on: ubuntu-latest
+    env:
+      TOOLCHAIN: ${{ needs.extract-toolchain.outputs.toolchain }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.TOOLCHAIN }}
+      - uses: swatinem/rust-cache@v2
+      - run: cargo test
