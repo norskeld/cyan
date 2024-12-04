@@ -1,14 +1,9 @@
-[package]
-name = "cyan"
-version = "0.1.0"
-description = "Compiler for a subset of C."
-authors = ["Vladislav Mamon <vlad@nrsk.dev>"]
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+default-members = ["crates/cyan"]
 
 [profile.release]
 lto = "thin"
-opt-level = "s"
 panic = "abort"
 debug = false

@@ -1,0 +1,11 @@
+[package]
+name = "cyan"
+version = "0.1.0"
+description = "Compiler for a subset of C."
+authors = ["Vladislav Mamon <vlad@nrsk.dev>"]
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.94"
+clap = { version = "4.5.22", features = ["derive"] }
+thiserror = "2.0.4"
