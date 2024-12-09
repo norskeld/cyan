@@ -6,6 +6,8 @@ authors = ["Vladislav Mamon <vlad@nrsk.dev>"]
 edition = "2021"
 
 [dependencies]
+cyan_compiler = { path = "../cyan_compiler" }
+
 anyhow = "1.0.94"
 clap = { version = "4.5.22", features = ["derive"] }
 thiserror = "2.0.4"

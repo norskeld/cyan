@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use clap::Parser;
+use cyan_compiler::lexer::Lexer;
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -36,13 +37,33 @@ fn compile(path: impl AsRef<Path>, options: CompileOptions) -> anyhow::Result<()
   let preprocessed = path.as_ref().with_extension("i");
   let _assembly = path.as_ref().with_extension("s");
 
+  let contents = fs::read_to_string(&preprocessed)?;
+
+  let mut lexer = Lexer::new(contents.as_bytes());
+  let tokens = lexer.lex();
+
   if options.lex {
-    return Ok(println!("Lexing"));
-  } else if options.parse {
-    return Ok(println!("Lexing >> Parsing"));
-  } else if options.codegen {
+    println!("Stage: Lexing\n");
+    println!("[");
+
+    for token in tokens {
+      println!("  {token}");
+    }
+
+    println!("]");
+
+    return Ok(());
+  }
+
+  if options.parse {
+    return Ok(println!("Stage: Lexing >> Parsing"));
+  }
+
+  if options.codegen {
     return Ok(println!("Lexing >> Parsing >> Codegen"));
-  } else if options.link {
+  }
+
+  if options.link {
     return Ok(println!("Lexing >> Parsing >> Codegen >> Emit"));
   }
 
@@ -71,13 +92,17 @@ fn preprocess(path: impl AsRef<Path>) -> anyhow::Result<()> {
 fn link(path: impl AsRef<Path>) -> anyhow::Result<()> {
   let assembly = path.as_ref().with_extension("s");
 
+  if !assembly.is_file() {
+    return Ok(());
+  }
+
   let stem = assembly
     .file_stem()
     .map(|it| it.to_string_lossy().to_string())
     .expect("Should contain valid file name");
 
   let output = Command::new("gcc")
-    .arg(&assembly.display().to_string())
+    .arg(assembly.display().to_string())
     .args(["-o", &stem])
     .output()?;
 

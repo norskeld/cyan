@@ -3,6 +3,10 @@ resolver = "2"
 members = ["crates/*"]
 default-members = ["crates/cyan"]
 
+[workspace.dependencies]
+pretty_assertions = "1.4.1"
+indoc = "2.0.5"
+
 [profile.release]
 lto = "thin"
 panic = "abort"
