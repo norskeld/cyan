@@ -11,16 +11,16 @@ struct Cli {
   /// C program to compile.
   input: String,
   /// Run the lexer, but stop before parsing.
-  #[arg(short, long, exclusive = true)]
+  #[arg(short, long, conflicts_with_all = ["parse", "codegen", "link"])]
   lex: bool,
   /// Run the lexer and parser, but stop before codegen.
-  #[arg(short, long, exclusive = true)]
+  #[arg(short, long, conflicts_with_all = ["lex", "codegen", "link"])]
   parse: bool,
   /// Perform lexing, parsing, and assembly generation, but stop before codegen.
-  #[arg(short, long, exclusive = true)]
+  #[arg(short, long, conflicts_with_all = ["lex", "parse", "link"])]
   codegen: bool,
   /// Generate assembly, but do not perform linking.
-  #[arg(short = 'S', long, exclusive = true)]
+  #[arg(short = 'S', long, conflicts_with_all = ["lex", "parse", "codegen"])]
   link: bool,
 }
 
