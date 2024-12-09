@@ -137,7 +137,7 @@ impl<'i> Lexer<'i> {
   }
 }
 
-impl<'i> Lexer<'i> {
+impl Lexer<'_> {
   /// Returns the next token.
   fn next(&mut self) -> Token {
     match self.current_byte() {

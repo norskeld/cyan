@@ -56,15 +56,18 @@ fn compile(path: impl AsRef<Path>, options: CompileOptions) -> anyhow::Result<()
   }
 
   if options.parse {
-    return Ok(println!("Stage: Lexing >> Parsing"));
+    println!("Stage: Lexing >> Parsing");
+    return Ok(());
   }
 
   if options.codegen {
-    return Ok(println!("Lexing >> Parsing >> Codegen"));
+    println!("Lexing >> Parsing >> Codegen");
+    return Ok(());
   }
 
   if options.link {
-    return Ok(println!("Lexing >> Parsing >> Codegen >> Emit"));
+    println!("Lexing >> Parsing >> Codegen >> Emit");
+    return Ok(());
   }
 
   fs::remove_file(&preprocessed)?;
