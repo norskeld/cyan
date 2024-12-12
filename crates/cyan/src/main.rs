@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use clap::Parser;
-use cyan_compiler::lexer::Lexer;
+use cyan_compiler::lexer;
+use cyan_compiler::parser;
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -12,16 +13,16 @@ struct Cli {
   /// C program to compile.
   input: String,
   /// Run the lexer, but stop before parsing.
-  #[arg(short, long, conflicts_with_all = ["parse", "codegen", "link"])]
+  #[arg(short, long)]
   lex: bool,
   /// Run the lexer and parser, but stop before codegen.
-  #[arg(short, long, conflicts_with_all = ["lex", "codegen", "link"])]
+  #[arg(short, long)]
   parse: bool,
   /// Perform lexing, parsing, and assembly generation, but stop before codegen.
-  #[arg(short, long, conflicts_with_all = ["lex", "parse", "link"])]
+  #[arg(short, long)]
   codegen: bool,
   /// Generate assembly, but do not perform linking.
-  #[arg(short = 'S', long, conflicts_with_all = ["lex", "parse", "codegen"])]
+  #[arg(short = 'S', long)]
   link: bool,
 }
 
@@ -33,46 +34,60 @@ struct CompileOptions {
   link: bool,
 }
 
+fn header(text: &str) -> String {
+  let mut header = String::new();
+
+  header.push_str("+----------------------------+\n");
+  header.push_str(format!("| {text:<26} |\n").as_str());
+  header.push_str("+----------------------------+\n");
+
+  header
+}
+
 fn compile(path: impl AsRef<Path>, options: CompileOptions) -> anyhow::Result<()> {
   let preprocessed = path.as_ref().with_extension("i");
   let _assembly = path.as_ref().with_extension("s");
 
   let contents = fs::read_to_string(&preprocessed)?;
 
-  let mut lexer = Lexer::new(contents.as_bytes());
+  let mut lexer = lexer::Lexer::new(contents.as_bytes());
   let tokens = lexer.lex();
 
   if options.lex {
-    println!("Stage: Lexing\n");
+    println!("{}", header("Lex (tokens)"));
     println!("[");
 
-    for token in tokens {
+    for token in &tokens {
       println!("  {token}");
     }
 
-    println!("]");
-
-    return Ok(());
+    println!("]\n");
   }
 
+  let mut parser = parser::Parser::new(tokens);
+  let program = parser.parse()?;
+
   if options.parse {
-    println!("Stage: Lexing >> Parsing");
-    return Ok(());
+    println!("{}", header("Parse (AST)"));
+    println!("{program:#?}");
+    println!();
   }
 
   if options.codegen {
-    println!("Lexing >> Parsing >> Codegen");
-    return Ok(());
+    println!("{}", header("Codegen (assembly)"));
+    println!("<unimplemented>");
+    println!();
   }
 
   if options.link {
-    println!("Lexing >> Parsing >> Codegen >> Emit");
-    return Ok(());
+    println!("{}", header("Link"));
+    println!("<unimplemented>");
+    println!();
   }
 
   fs::remove_file(&preprocessed)?;
 
-  unimplemented!("compilation");
+  Err(anyhow::anyhow!("Compilation is not implemented yet"))
 }
 
 fn preprocess(path: impl AsRef<Path>) -> anyhow::Result<()> {
@@ -126,22 +141,16 @@ fn main() -> anyhow::Result<()> {
   // Absolute file path.
   let path = PathBuf::from(cli.input).canonicalize()?;
 
+  // Compile options.
+  let compile_options = CompileOptions {
+    lex: cli.lex,
+    parse: cli.parse,
+    codegen: cli.codegen,
+    link: cli.link,
+  };
+
   // Preprocess via gcc/clang.
-  preprocess(&path)?;
-
-  // Compile via cyan.
-  compile(
-    &path,
-    CompileOptions {
-      lex: cli.lex,
-      parse: cli.parse,
-      codegen: cli.codegen,
-      link: cli.link,
-    },
-  )?;
-
-  // Link via gcc/clang.
-  link(&path)?;
-
-  Ok(())
+  preprocess(&path)
+    .and_then(|_| compile(&path, compile_options))
+    .and_then(|_| link(&path))
 }

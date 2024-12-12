@@ -2,6 +2,12 @@ use std::cmp::{Ord, Ordering, PartialOrd};
 use std::fmt;
 use std::ops::Range;
 
+/// A trait for expressions that have a location span.
+pub trait Spanned {
+  /// Returns the location span of the expression.
+  fn span(&self) -> &Span;
+}
+
 /// The location span of a single expression.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Span {
