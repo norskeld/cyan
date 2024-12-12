@@ -30,21 +30,25 @@ pub enum TokenKind {
 impl TokenKind {
   pub fn description(&self) -> &str {
     match self {
-      | TokenKind::IntKw => "the `int` keyword",
-      | TokenKind::VoidKw => "the `void` keyword",
-      | TokenKind::ReturnKw => "the `return` keyword",
+      // Keywords.
+      | TokenKind::IntKw => "the 'int' keyword",
+      | TokenKind::VoidKw => "the 'void' keyword",
+      | TokenKind::ReturnKw => "the 'return' keyword",
 
-      | TokenKind::ParenOpen => "a `(`",
-      | TokenKind::ParenClose => "a `)`",
-      | TokenKind::BraceOpen => "a `{`",
-      | TokenKind::BraceClose => "a `}`",
-      | TokenKind::Semicolon => "a `;`",
+      // Punctuation.
+      | TokenKind::ParenOpen => "a '('",
+      | TokenKind::ParenClose => "a ')'",
+      | TokenKind::BraceOpen => "a '{'",
+      | TokenKind::BraceClose => "a '}'",
+      | TokenKind::Semicolon => "a ';'",
 
+      // Non-terminals.
       | TokenKind::Constant => "a constant",
       | TokenKind::Identifier => "an identifier",
       | TokenKind::Newline => "a newline",
       | TokenKind::Whitespace => "whitespace",
 
+      // Other.
       | TokenKind::Invalid => "an invalid token",
       | TokenKind::Eof => "the end of input",
     }
@@ -85,6 +89,12 @@ impl Token {
       self.kind,
       TokenKind::IntKw | TokenKind::VoidKw | TokenKind::ReturnKw
     )
+  }
+}
+
+impl Default for Token {
+  fn default() -> Self {
+    Self::eof(Span::default())
   }
 }
 

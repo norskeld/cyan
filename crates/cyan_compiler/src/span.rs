@@ -37,6 +37,16 @@ impl Span {
   }
 }
 
+impl Default for Span {
+  fn default() -> Self {
+    Self {
+      offsets: 0..0,
+      lines: 1..1,
+      cols: 1..1,
+    }
+  }
+}
+
 impl fmt::Debug for Span {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(
