@@ -1,60 +1,124 @@
+use std::fmt;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use cyan_compiler::lexer;
 use cyan_compiler::parser;
+
+/// Helper macro to bail on a specified [CompileStage].
+macro_rules! bail_on {
+  ($options: expr, $stage: expr) => {
+    if $options.should_bail($stage) {
+      let message = format!("WARN | Bailed on stage '{}'", $stage);
+      let message = format!("{}", boxed(&message));
+
+      println!("{message}");
+
+      return Ok(CompileStatus::Bailed);
+    }
+  };
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum CompileStage {
+  Lex,
+  Parse,
+  Codegen,
+  Link,
+}
+
+impl fmt::Display for CompileStage {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let stage = match self {
+      | CompileStage::Lex => "Lex",
+      | CompileStage::Parse => "Parse",
+      | CompileStage::Codegen => "Codegen",
+      | CompileStage::Link => "Link",
+    };
+
+    write!(f, "{stage}")
+  }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum CompileStatus {
+  Success,
+  Bailed,
+}
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
   /// C program to compile.
   input: String,
-  /// Run the lexer, but stop before parsing.
-  #[arg(short, long)]
-  lex: bool,
-  /// Run the lexer and parser, but stop before codegen.
-  #[arg(short, long)]
-  parse: bool,
-  /// Perform lexing, parsing, and assembly generation, but stop before codegen.
-  #[arg(short, long)]
-  codegen: bool,
-  /// Generate assembly, but do not perform linking.
-  #[arg(short = 'S', long)]
-  link: bool,
+  /// Stages to print debug output for.
+  #[arg(short, long, num_args = 1.., value_enum, value_delimiter = ' ')]
+  print: Vec<CompileStage>,
+  /// Stage to stop compilation at.
+  #[arg(short, long, value_enum)]
+  stage: Option<CompileStage>,
 }
 
 #[derive(Debug)]
 struct CompileOptions {
-  lex: bool,
-  parse: bool,
-  codegen: bool,
-  link: bool,
+  print: Vec<CompileStage>,
+  stage: Option<CompileStage>,
 }
 
-fn header(text: &str) -> String {
-  let mut header = String::new();
+impl CompileOptions {
+  /// Creates a new compile options struct from the CLI arguments.
+  fn from_cli(cli: Cli) -> Self {
+    Self {
+      print: cli.print,
+      stage: cli.stage,
+    }
+  }
 
-  header.push_str("+----------------------------+\n");
-  header.push_str(format!("| {text:<26} |\n").as_str());
-  header.push_str("+----------------------------+\n");
+  /// Returns `true` if the given stage should be printed.
+  fn should_print(&self, stage: CompileStage) -> bool {
+    self.print.contains(&stage)
+  }
+
+  /// Returns `true` if the given stage should be bailed on.
+  fn should_bail(&self, target: CompileStage) -> bool {
+    match self.stage {
+      | Some(stage) => stage == target,
+      | None => false,
+    }
+  }
+}
+
+/// Returns a string with an ASCII box around the given text.
+fn boxed(text: &str) -> String {
+  let mut header = String::new();
+  let size = text.len();
+
+  let line = "+-".to_string() + "-".repeat(size).as_str() + "-+\n";
+  let message = format!("| {text:<size$} |\n", size = size);
+
+  header.push_str(&line);
+  header.push_str(&message);
+  header.push_str(&line);
 
   header
 }
 
-fn compile(path: impl AsRef<Path>, options: CompileOptions) -> anyhow::Result<()> {
+/// Compiles the given C source file.
+fn compile(path: impl AsRef<Path>, options: CompileOptions) -> anyhow::Result<CompileStatus> {
   let preprocessed = path.as_ref().with_extension("i");
   let _assembly = path.as_ref().with_extension("s");
 
   let contents = fs::read_to_string(&preprocessed)?;
 
+  // Lex.
   let mut lexer = lexer::Lexer::new(contents.as_bytes());
   let tokens = lexer.lex();
 
-  if options.lex {
-    println!("{}", header("Lex (tokens)"));
+  if options.should_print(CompileStage::Lex) {
+    println!("{}", boxed("Stage | Lex (tokens)"));
     println!("[");
 
     for token in &tokens {
@@ -64,32 +128,46 @@ fn compile(path: impl AsRef<Path>, options: CompileOptions) -> anyhow::Result<()
     println!("]\n");
   }
 
+  bail_on!(options, CompileStage::Lex);
+
+  // Parse.
   let mut parser = parser::Parser::new(tokens);
   let program = parser.parse()?;
 
-  if options.parse {
-    println!("{}", header("Parse (AST)"));
+  if options.should_print(CompileStage::Parse) {
+    println!("{}", boxed("Stage | Parse (AST)"));
     println!("{program:#?}");
     println!();
   }
 
-  if options.codegen {
-    println!("{}", header("Codegen (assembly)"));
+  bail_on!(options, CompileStage::Parse);
+
+  // Codegen.
+  if options.should_print(CompileStage::Codegen) {
+    println!("{}", boxed("Stage | Codegen (assembly)"));
     println!("<unimplemented>");
     println!();
   }
 
-  if options.link {
-    println!("{}", header("Link"));
+  bail_on!(options, CompileStage::Codegen);
+
+  // Clean up.
+  fs::remove_file(&preprocessed)
+    .map_err(|_| anyhow::anyhow!("Failed to remove preprocessed file"))?;
+
+  // Link.
+  if options.should_print(CompileStage::Link) {
+    println!("{}", boxed("Stage | Link"));
     println!("<unimplemented>");
     println!();
   }
 
-  fs::remove_file(&preprocessed)?;
+  bail_on!(options, CompileStage::Link);
 
-  Err(anyhow::anyhow!("Compilation is not implemented yet"))
+  Ok(CompileStatus::Success)
 }
 
+/// Preprocesses the given C source file using GCC.
 fn preprocess(path: impl AsRef<Path>) -> anyhow::Result<()> {
   let preprocessed = path.as_ref().with_extension("i");
 
@@ -107,11 +185,12 @@ fn preprocess(path: impl AsRef<Path>) -> anyhow::Result<()> {
   Ok(())
 }
 
+/// Links the given assembly file using GCC.
 fn link(path: impl AsRef<Path>) -> anyhow::Result<()> {
   let assembly = path.as_ref().with_extension("s");
 
   if !assembly.is_file() {
-    return Ok(());
+    return Err(anyhow::anyhow!("Assembly file not found"));
   }
 
   let stem = assembly
@@ -129,7 +208,7 @@ fn link(path: impl AsRef<Path>) -> anyhow::Result<()> {
     io::stderr().write_all(&output.stderr)?;
   }
 
-  fs::remove_file(&assembly)?;
+  fs::remove_file(&assembly).map_err(|_| anyhow::anyhow!("Failed to remove assembly file"))?;
 
   Ok(())
 }
@@ -139,18 +218,17 @@ fn main() -> anyhow::Result<()> {
   let cli = Cli::parse();
 
   // Absolute file path.
-  let path = PathBuf::from(cli.input).canonicalize()?;
+  let path = PathBuf::from(&cli.input).canonicalize()?;
 
-  // Compile options.
-  let compile_options = CompileOptions {
-    lex: cli.lex,
-    parse: cli.parse,
-    codegen: cli.codegen,
-    link: cli.link,
-  };
+  // Compile options from CLI.
+  let options = CompileOptions::from_cli(cli);
 
-  // Preprocess via gcc/clang.
-  preprocess(&path)
-    .and_then(|_| compile(&path, compile_options))
-    .and_then(|_| link(&path))
+  // Preprocess.
+  preprocess(&path)?;
+
+  // Compile and then link.
+  match compile(&path, options)? {
+    | CompileStatus::Success => link(&path),
+    | CompileStatus::Bailed => Ok(()),
+  }
 }
