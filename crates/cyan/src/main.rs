@@ -1,7 +1,7 @@
 use std::fmt;
 use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 use clap::{Parser, ValueEnum};
@@ -65,19 +65,15 @@ struct Cli {
 
 #[derive(Debug)]
 struct CompileOptions {
+  /// Path to the file to compile.
+  path: PathBuf,
+  /// Stages to print debug output for.
   print: Vec<CompileStage>,
+  /// Stage to stop compilation at.
   stage: Option<CompileStage>,
 }
 
 impl CompileOptions {
-  /// Creates a new compile options struct from the CLI arguments.
-  fn from_cli(cli: Cli) -> Self {
-    Self {
-      print: cli.print,
-      stage: cli.stage,
-    }
-  }
-
   /// Returns `true` if the given stage should be printed.
   fn should_print(&self, stage: CompileStage) -> bool {
     self.print.contains(&stage)
@@ -108,10 +104,8 @@ fn boxed(text: &str) -> String {
 }
 
 /// Compiles the given C source file.
-fn compile(path: impl AsRef<Path>, options: CompileOptions) -> anyhow::Result<CompileStatus> {
-  let preprocessed = path.as_ref().with_extension("i");
-  let _assembly = path.as_ref().with_extension("s");
-
+fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
+  let preprocessed = options.path.with_extension("i");
   let contents = fs::read_to_string(&preprocessed)?;
 
   // Lex.
@@ -158,10 +152,6 @@ fn compile(path: impl AsRef<Path>, options: CompileOptions) -> anyhow::Result<Co
 
   bail_on!(options, CompileStage::Codegen);
 
-  // Clean up.
-  fs::remove_file(&preprocessed)
-    .map_err(|_| anyhow::anyhow!("Failed to remove preprocessed file"))?;
-
   // Link.
   if options.should_print(CompileStage::Link) {
     println!("{}", boxed("Stage | Link"));
@@ -175,12 +165,12 @@ fn compile(path: impl AsRef<Path>, options: CompileOptions) -> anyhow::Result<Co
 }
 
 /// Preprocesses the given C source file using GCC.
-fn preprocess(path: impl AsRef<Path>) -> anyhow::Result<()> {
-  let preprocessed = path.as_ref().with_extension("i");
+fn preprocess(options: &CompileOptions) -> anyhow::Result<()> {
+  let preprocessed = options.path.with_extension("i");
 
   let output = Command::new("gcc")
     .arg("-E")
-    .args(["-P", &path.as_ref().display().to_string()])
+    .args(["-P", &options.path.display().to_string()])
     .args(["-o", &preprocessed.display().to_string()])
     .output()?;
 
@@ -193,8 +183,8 @@ fn preprocess(path: impl AsRef<Path>) -> anyhow::Result<()> {
 }
 
 /// Links the given assembly file using GCC.
-fn link(path: impl AsRef<Path>) -> anyhow::Result<()> {
-  let assembly = path.as_ref().with_extension("s");
+fn link(options: &CompileOptions) -> anyhow::Result<()> {
+  let assembly = options.path.with_extension("s");
 
   if !assembly.is_file() {
     return Err(anyhow::anyhow!("Assembly file not found"));
@@ -215,27 +205,55 @@ fn link(path: impl AsRef<Path>) -> anyhow::Result<()> {
     io::stderr().write_all(&output.stderr)?;
   }
 
-  fs::remove_file(&assembly).map_err(|_| anyhow::anyhow!("Failed to remove assembly file"))?;
+  Ok(())
+}
+
+fn cleanup(options: &CompileOptions) -> anyhow::Result<()> {
+  let assembly = options.path.with_extension("s");
+  let preprocessed = options.path.with_extension("i");
+
+  if preprocessed.is_file() {
+    fs::remove_file(&preprocessed).map_err(|_| {
+      anyhow::anyhow!(
+        "Failed to remove preprocessed file: {}",
+        preprocessed.display()
+      )
+    })?;
+  }
+
+  if assembly.is_file() {
+    fs::remove_file(&assembly)
+      .map_err(|_| anyhow::anyhow!("Failed to remove assembly file: {}", assembly.display()))?;
+  }
 
   Ok(())
+}
+
+fn execute(options: &CompileOptions) -> anyhow::Result<()> {
+  // Preprocess.
+  preprocess(&options)?;
+
+  // Compile and then link.
+  match compile(&options) {
+    | Ok(CompileStatus::Success) => link(&options),
+    | Ok(CompileStatus::Bailed) => Ok(()),
+    | Err(err) => Err(err),
+  }
 }
 
 /// Compiler driver.
 fn main() -> anyhow::Result<()> {
   let cli = Cli::parse();
 
-  // Absolute file path.
-  let path = PathBuf::from(&cli.input).canonicalize()?;
-
   // Compile options from CLI.
-  let options = CompileOptions::from_cli(cli);
+  let options = CompileOptions {
+    path: PathBuf::from(&cli.input).canonicalize()?,
+    print: cli.print,
+    stage: cli.stage,
+  };
 
-  // Preprocess.
-  preprocess(&path)?;
-
-  // Compile and then link.
-  match compile(&path, options)? {
-    | CompileStatus::Success => link(&path),
-    | CompileStatus::Bailed => Ok(()),
+  match execute(&options) {
+    | Ok(..) => cleanup(&options),
+    | Err(err) => Err(err),
   }
 }
