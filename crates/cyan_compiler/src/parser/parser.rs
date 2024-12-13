@@ -11,9 +11,9 @@
 
 use thiserror::Error;
 
-use crate::ast;
 use crate::lexer::{Token, TokenKind};
 use crate::span::Span;
+use crate::trees::ast;
 
 type Result<T> = std::result::Result<T, ParseError>;
 
@@ -55,14 +55,11 @@ impl Parser {
   /// Parses the input and returns the AST.
   pub fn parse(&mut self) -> Result<ast::Program> {
     let init_span = Span::default();
-    let function_definition = self.function_definition()?;
+    let function = self.function()?;
 
-    let span = Span::merge(&init_span, &function_definition.span);
+    let span = Span::merge(&init_span, &function.span);
 
-    Ok(ast::Program {
-      function_definition,
-      span,
-    })
+    Ok(ast::Program { function, span })
   }
 
   /// Returns the next token, skipping whitespace and comments.
@@ -149,7 +146,7 @@ impl Parser {
 
 impl Parser {
   /// Parses a function definition.
-  fn function_definition(&mut self) -> Result<ast::FunctionDefinition> {
+  fn function(&mut self) -> Result<ast::Function> {
     let start = self.expect(TokenKind::IntKw)?;
 
     let name = self.identifier()?;
@@ -165,7 +162,7 @@ impl Parser {
 
     let span = Span::merge(&start.span, &close.span);
 
-    Ok(ast::FunctionDefinition { name, body, span })
+    Ok(ast::Function { name, body, span })
   }
 
   /// Parses a statement.
@@ -249,9 +246,9 @@ impl Parser {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::ast;
   use crate::lexer::Token;
   use crate::span::Span;
+  use crate::trees::ast;
 
   fn token(kind: TokenKind, value: &str, span: Span) -> Token {
     Token::new(kind, value.to_string(), span)
@@ -279,7 +276,7 @@ mod tests {
     .expect("should parse function definition");
 
     let expected = ast::Program {
-      function_definition: ast::FunctionDefinition {
+      function: ast::Function {
         name: ast::Identifier {
           value: "main".to_string(),
           span: Span::default(),

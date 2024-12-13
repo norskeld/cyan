@@ -7,6 +7,7 @@ use std::process::Command;
 use clap::{Parser, ValueEnum};
 use cyan_compiler::lexer;
 use cyan_compiler::parser;
+use cyan_compiler::trees::aast;
 
 /// Helper macro to bail on a specified [CompileStage].
 macro_rules! bail_on {
@@ -143,8 +144,14 @@ fn compile(path: impl AsRef<Path>, options: CompileOptions) -> anyhow::Result<Co
   bail_on!(options, CompileStage::Parse);
 
   // Codegen.
+  let aast = aast::Lowerer::new(program).lower()?;
+
   if options.should_print(CompileStage::Codegen) {
-    println!("{}", boxed("Stage | Codegen (assembly)"));
+    println!("{}", boxed("Stage | AAST (Assembly AST)"));
+    println!("{aast:#?}");
+    println!();
+
+    println!("{}", boxed("Stage | Codegen"));
     println!("<unimplemented>");
     println!();
   }

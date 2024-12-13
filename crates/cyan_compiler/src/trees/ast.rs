@@ -1,10 +1,10 @@
-//! AST Definition using Zephyr ASDL:
+//! AST definition using Zephyr ASDL:
 //!
 //! ```zephyr
-//! program             = Program(function_definition)
-//! function_definition = Function(identifier name, statement body)
-//! statement           = Return(expression)
-//! expression          = Constant(int)
+//! program    = Program(function)
+//! function   = Function(identifier name, statement body)
+//! statement  = Return(expression)
+//! expression = Constant(int)
 //! ```
 
 /// A helper macro that adds a `span` field to an AST node and implements [Spanned] for it.
@@ -67,13 +67,13 @@ macro_rules! spanned {
 spanned! {
   #[derive(Debug, PartialEq, Eq)]
   pub struct Program {
-    pub function_definition: FunctionDefinition,
+    pub function: Function,
   }
 }
 
 spanned! {
   #[derive(Debug, PartialEq, Eq)]
-  pub struct FunctionDefinition {
+  pub struct Function {
     pub name: Identifier,
     pub body: Statement,
   }
