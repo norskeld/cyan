@@ -31,13 +31,8 @@ pub enum Instruction {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Operand {
-  Imm(Int),
+  Imm(isize),
   Register,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Int {
-  pub value: isize,
 }
 
 #[derive(Debug, Error)]
@@ -101,11 +96,9 @@ impl Lowerer {
   }
 
   fn lower_int(&self, int: &ast::Int) -> Result<Vec<Instruction>, LoweringError> {
-    let value = int.value;
-
     Ok(vec![
       Instruction::Mov {
-        src: Operand::Imm(Int { value }),
+        src: Operand::Imm(int.value),
         dst: Operand::Register,
       },
       Instruction::Ret,

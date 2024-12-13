@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use clap::{Parser, ValueEnum};
+use cyan_compiler::emitter;
 use cyan_compiler::lexer;
 use cyan_compiler::parser;
 use cyan_compiler::trees::aast;
@@ -106,6 +107,8 @@ fn boxed(text: &str) -> String {
 /// Compiles the given C source file.
 fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   let preprocessed = options.path.with_extension("i");
+  let assembly = options.path.with_extension("s");
+
   let contents = fs::read_to_string(&preprocessed)?;
 
   // Lex.
@@ -139,16 +142,21 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
 
   // Codegen.
   let aast = aast::Lowerer::new(program).lower()?;
+  let emitter = emitter::Emitter::new();
+  let emitted = emitter.emit(&aast);
 
   if options.should_print(CompileStage::Codegen) {
-    println!("{}", boxed("Stage | AAST (Assembly AST)"));
+    println!("{}", boxed("Stage | Codegen (AAST)"));
     println!("{aast:#?}");
     println!();
 
-    println!("{}", boxed("Stage | Codegen"));
-    println!("<unimplemented>");
+    println!("{}", boxed("Stage | Codegen (Assembly)"));
+    println!("{}", String::from_utf8_lossy(&emitted));
     println!();
   }
+
+  fs::write(&assembly, emitted)
+    .map_err(|_| anyhow::anyhow!("Failed to write assembly file: {}", assembly.display()))?;
 
   bail_on!(options, CompileStage::Codegen);
 
@@ -190,14 +198,18 @@ fn link(options: &CompileOptions) -> anyhow::Result<()> {
     return Err(anyhow::anyhow!("Assembly file not found"));
   }
 
+  let parent = options.path.parent().ok_or(anyhow::anyhow!(
+    "Output path is not valid as it has no parent"
+  ))?;
+
   let stem = assembly
     .file_stem()
     .map(|it| it.to_string_lossy().to_string())
-    .expect("Should contain valid file name");
+    .ok_or(anyhow::anyhow!("Failed to get the file base name"))?;
 
   let output = Command::new("gcc")
     .arg(assembly.display().to_string())
-    .args(["-o", &stem])
+    .args(["-o", &parent.join(stem).display().to_string()])
     .output()?;
 
   if !output.status.success() {
@@ -208,8 +220,7 @@ fn link(options: &CompileOptions) -> anyhow::Result<()> {
   Ok(())
 }
 
-fn cleanup(options: &CompileOptions) -> anyhow::Result<()> {
-  let assembly = options.path.with_extension("s");
+fn cleanup_compile(options: &CompileOptions) -> anyhow::Result<()> {
   let preprocessed = options.path.with_extension("i");
 
   if preprocessed.is_file() {
@@ -220,6 +231,12 @@ fn cleanup(options: &CompileOptions) -> anyhow::Result<()> {
       )
     })?;
   }
+
+  Ok(())
+}
+
+fn cleanup_link(options: &CompileOptions) -> anyhow::Result<()> {
+  let assembly = options.path.with_extension("s");
 
   if assembly.is_file() {
     fs::remove_file(&assembly)
@@ -235,9 +252,19 @@ fn execute(options: &CompileOptions) -> anyhow::Result<()> {
 
   // Compile and then link.
   match compile(options) {
-    | Ok(CompileStatus::Success) => link(options),
-    | Ok(CompileStatus::Bailed) => Ok(()),
-    | Err(err) => Err(err),
+    | Ok(CompileStatus::Success) => {
+      cleanup_compile(options)?;
+      link(options)?;
+      cleanup_link(options)
+    },
+    | Ok(CompileStatus::Bailed) => {
+      cleanup_compile(options)?;
+      Ok(())
+    },
+    | Err(err) => {
+      cleanup_compile(options)?;
+      Err(err)
+    },
   }
 }
 
@@ -252,11 +279,5 @@ fn main() -> anyhow::Result<()> {
     stage: cli.stage,
   };
 
-  match execute(&options) {
-    | Ok(..) => cleanup(&options),
-    | Err(err) => {
-      println!("{err}");
-      cleanup(&options)
-    },
-  }
+  execute(&options)
 }
