@@ -254,6 +254,9 @@ fn main() -> anyhow::Result<()> {
 
   match execute(&options) {
     | Ok(..) => cleanup(&options),
-    | Err(err) => Err(err),
+    | Err(err) => {
+      println!("{err}");
+      cleanup(&options)
+    },
   }
 }
