@@ -231,11 +231,11 @@ fn cleanup(options: &CompileOptions) -> anyhow::Result<()> {
 
 fn execute(options: &CompileOptions) -> anyhow::Result<()> {
   // Preprocess.
-  preprocess(&options)?;
+  preprocess(options)?;
 
   // Compile and then link.
-  match compile(&options) {
-    | Ok(CompileStatus::Success) => link(&options),
+  match compile(options) {
+    | Ok(CompileStatus::Success) => link(options),
     | Ok(CompileStatus::Bailed) => Ok(()),
     | Err(err) => Err(err),
   }
