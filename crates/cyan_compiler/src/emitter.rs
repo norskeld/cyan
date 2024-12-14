@@ -29,11 +29,21 @@ impl Emitter {
 impl Emitter {
   fn emit_program(&mut self, program: &aast::Program) {
     self.emit_function(&program.function);
+
+    if cfg!(target_os = "linux") {
+      self.writeln("\t.section .note.GNU-stack,\"\",@progbits");
+    }
   }
 
   fn emit_function(&mut self, function: &aast::Function) {
-    self.writeln(format!("\t.globl _{}", &function.name));
-    self.writeln(format!("_{}:", &function.name));
+    let name = if cfg!(target_os = "macos") {
+      format!("_{}", function.name)
+    } else {
+      format!("{}", function.name)
+    };
+
+    self.writeln(format!("\t.globl {name}"));
+    self.writeln(format!("{name}:"));
 
     for instruction in &function.instructions {
       self.emit_instruction(instruction);
