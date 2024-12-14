@@ -39,7 +39,7 @@ impl Emitter {
     let name = if cfg!(target_os = "macos") {
       format!("_{}", function.name)
     } else {
-      format!("{}", function.name)
+      function.name.to_string()
     };
 
     self.writeln(format!("\t.globl {name}"));
