@@ -46,7 +46,7 @@ fn test_compiler() {
 
         let output = Command::new("cargo")
           .args(["run", "--quiet", "--package", "cyan", "--"])
-          .args([&input.display().to_string(), "--stage", "codegen"])
+          .args([&input.display().to_string()])
           .output()
           .expect("should get output");
 
