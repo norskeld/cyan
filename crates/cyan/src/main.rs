@@ -1,3 +1,5 @@
+mod extensions;
+
 use std::fmt;
 use std::fs;
 use std::io::{self, Write};
@@ -9,6 +11,7 @@ use cyan_compiler::emitter;
 use cyan_compiler::lexer;
 use cyan_compiler::parser;
 use cyan_compiler::trees::aast;
+use extensions::WithoutFileExtension;
 
 /// Helper macro to bail on a specified [CompileStage].
 macro_rules! bail_on {
@@ -56,18 +59,28 @@ enum CompileStatus {
 struct Cli {
   /// C program to compile.
   input: String,
+  /// Output file.
+  #[arg(short, long)]
+  output: Option<String>,
   /// Stages to print debug output for.
   #[arg(short, long, num_args = 1.., value_enum, value_delimiter = ' ')]
   print: Vec<CompileStage>,
   /// Stage to stop compilation at.
   #[arg(short, long, value_enum)]
   stage: Option<CompileStage>,
+  /// Whether to cleanup the intermediate files.
+  #[arg(short, long)]
+  cleanup: Option<bool>,
 }
 
 #[derive(Debug)]
 struct CompileOptions {
   /// Path to the file to compile.
-  path: PathBuf,
+  input: PathBuf,
+  /// Output file.
+  output: PathBuf,
+  /// Whether to cleanup the intermediate files.
+  cleanup: bool,
   /// Stages to print debug output for.
   print: Vec<CompileStage>,
   /// Stage to stop compilation at.
@@ -106,8 +119,8 @@ fn boxed(text: &str) -> String {
 
 /// Compiles the given C source file.
 fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
-  let preprocessed = options.path.with_extension("i");
-  let assembly = options.path.with_extension("s");
+  let preprocessed = options.input.with_extension("i");
+  let assembly = options.input.with_extension("s");
 
   let contents = fs::read_to_string(&preprocessed)?;
 
@@ -174,11 +187,11 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
 
 /// Preprocesses the given C source file using GCC.
 fn preprocess(options: &CompileOptions) -> anyhow::Result<()> {
-  let preprocessed = options.path.with_extension("i");
+  let preprocessed = options.input.with_extension("i");
 
   let output = Command::new("gcc")
     .arg("-E")
-    .args(["-P", &options.path.display().to_string()])
+    .args(["-P", &options.input.display().to_string()])
     .args(["-o", &preprocessed.display().to_string()])
     .output()?;
 
@@ -192,24 +205,15 @@ fn preprocess(options: &CompileOptions) -> anyhow::Result<()> {
 
 /// Links the given assembly file using GCC.
 fn link(options: &CompileOptions) -> anyhow::Result<()> {
-  let assembly = options.path.with_extension("s");
+  let assembly = options.input.with_extension("s");
 
   if !assembly.is_file() {
     return Err(anyhow::anyhow!("Assembly file not found"));
   }
 
-  let parent = options.path.parent().ok_or(anyhow::anyhow!(
-    "Output path is not valid as it has no parent"
-  ))?;
-
-  let stem = assembly
-    .file_stem()
-    .map(|it| it.to_string_lossy().to_string())
-    .ok_or(anyhow::anyhow!("Failed to get the file base name"))?;
-
   let output = Command::new("gcc")
     .arg(assembly.display().to_string())
-    .args(["-o", &parent.join(stem).display().to_string()])
+    .args(["-o", &options.output.display().to_string()])
     .output()?;
 
   if !output.status.success() {
@@ -220,8 +224,13 @@ fn link(options: &CompileOptions) -> anyhow::Result<()> {
   Ok(())
 }
 
+/// Cleans up the intermediate files produced by GCC.
 fn cleanup_compile(options: &CompileOptions) -> anyhow::Result<()> {
-  let preprocessed = options.path.with_extension("i");
+  if !options.cleanup {
+    return Ok(());
+  }
+
+  let preprocessed = options.input.with_extension("i");
 
   if preprocessed.is_file() {
     fs::remove_file(&preprocessed).map_err(|_| {
@@ -235,8 +244,13 @@ fn cleanup_compile(options: &CompileOptions) -> anyhow::Result<()> {
   Ok(())
 }
 
+/// Cleans up the intermediate files produced by the compiler.
 fn cleanup_link(options: &CompileOptions) -> anyhow::Result<()> {
-  let assembly = options.path.with_extension("s");
+  if !options.cleanup {
+    return Ok(());
+  }
+
+  let assembly = options.input.with_extension("s");
 
   if assembly.is_file() {
     fs::remove_file(&assembly)
@@ -246,6 +260,20 @@ fn cleanup_link(options: &CompileOptions) -> anyhow::Result<()> {
   Ok(())
 }
 
+/// Returns the input and output paths from CLI.
+fn get_paths(cli: &Cli) -> anyhow::Result<(PathBuf, PathBuf)> {
+  let input = PathBuf::from(&cli.input).canonicalize()?;
+
+  let output = cli
+    .output
+    .as_ref()
+    .map(PathBuf::from)
+    .unwrap_or(input.without_extension());
+
+  Ok((input, output))
+}
+
+/// Executes the compiler.
 fn execute(options: &CompileOptions) -> anyhow::Result<()> {
   // Preprocess.
   preprocess(options)?;
@@ -272,9 +300,14 @@ fn execute(options: &CompileOptions) -> anyhow::Result<()> {
 fn main() -> anyhow::Result<()> {
   let cli = Cli::parse();
 
+  // Get paths.
+  let (input, output) = get_paths(&cli)?;
+
   // Compile options from CLI.
   let options = CompileOptions {
-    path: PathBuf::from(&cli.input).canonicalize()?,
+    input,
+    output,
+    cleanup: cli.cleanup.unwrap_or(true),
     print: cli.print,
     stage: cli.stage,
   };
