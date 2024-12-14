@@ -4,8 +4,9 @@ members = ["crates/*"]
 default-members = ["crates/cyan"]
 
 [workspace.dependencies]
-indoc = "2.0.5"
-pretty_assertions = "1.4.1"
+clap = { version = "4.5.22", features = ["derive"] }
+indoc = { version = "2.0.5" }
+pretty_assertions = { version = "1.4.1" }
 
 [profile.release]
 lto = "thin"

@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.94"
-miette = { version = "7.4.0", features = ["fancy"] }
 thiserror = "2.0.4"
 
 [dev-dependencies]

@@ -168,10 +168,10 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
     println!();
   }
 
+  bail_on!(options, CompileStage::Codegen);
+
   fs::write(&assembly, emitted)
     .map_err(|_| anyhow::anyhow!("Failed to write assembly file: {}", assembly.display()))?;
-
-  bail_on!(options, CompileStage::Codegen);
 
   // Link.
   if options.should_print(CompileStage::Link) {
