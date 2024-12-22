@@ -31,7 +31,7 @@ impl Emitter {
     self.emit_function(&program.function);
 
     if cfg!(target_os = "linux") {
-      self.writeln("\t.section .note.GNU-stack,\"\",@progbits");
+      self.writeln(".section .note.GNU-stack,\"\",@progbits\n");
     }
   }
 
@@ -42,7 +42,7 @@ impl Emitter {
       function.name.to_string()
     };
 
-    self.writeln(format!("\t.globl {name}"));
+    self.writeln(format!(".globl {name}\n"));
     self.writeln(format!("{name}:"));
 
     for instruction in &function.instructions {
