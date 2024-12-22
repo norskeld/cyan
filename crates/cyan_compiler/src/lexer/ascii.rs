@@ -28,7 +28,7 @@ pub const UNDERSCORE: u8 = b'_';
 
 // pub const STAR: u8 = b'*';
 // pub const PLUS: u8 = b'+';
-// pub const MINUS: u8 = b'-';
+pub const HYPHEN: u8 = b'-';
 // pub const SLASH: u8 = b'/';
 // pub const COLON: u8 = b':';
 pub const SEMICOLON: u8 = b';';
@@ -37,6 +37,7 @@ pub const SEMICOLON: u8 = b';';
 // pub const GREATER: u8 = b'>';
 // pub const BACKSLASH: u8 = b'\\';
 // pub const PIPE: u8 = b'|';
+pub const TILDE: u8 = b'~';
 
 pub const ZERO: u8 = b'0';
 pub const NINE: u8 = b'9';

@@ -9,6 +9,11 @@ pub enum TokenKind {
   VoidKw,
   ReturnKw,
 
+  // Operators.
+  BitwiseNot,
+  Decrement,
+  Negation,
+
   // Punctuation.
   ParenOpen,
   ParenClose,
@@ -34,6 +39,11 @@ impl TokenKind {
       | TokenKind::IntKw => "the 'int' keyword",
       | TokenKind::VoidKw => "the 'void' keyword",
       | TokenKind::ReturnKw => "the 'return' keyword",
+
+      // Operators.
+      | TokenKind::BitwiseNot => "a bitwise not operator",
+      | TokenKind::Decrement => "a decrement operator",
+      | TokenKind::Negation => "a negation operator",
 
       // Punctuation.
       | TokenKind::ParenOpen => "a '('",

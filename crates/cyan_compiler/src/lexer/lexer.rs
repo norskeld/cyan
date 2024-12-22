@@ -138,6 +138,8 @@ impl Lexer<'_> {
   pub fn next(&mut self) -> Token {
     match self.current_byte() {
       | ZERO..=NINE => self.constant(),
+      | TILDE => self.bitwise_not(),
+      | HYPHEN => self.negation_or_decrement(),
       | SEMICOLON => self.semicolon(),
       | BRACE_OPEN => self.brace_open(),
       | BRACE_CLOSE => self.brace_close(),
@@ -211,6 +213,30 @@ impl Lexer<'_> {
   /// Returns a token for the paren close.
   fn paren_close(&mut self) -> Token {
     self.token_single(TokenKind::ParenClose)
+  }
+
+  /// Returns a token for a bitwise not.
+  fn bitwise_not(&mut self) -> Token {
+    self.token_single(TokenKind::BitwiseNot)
+  }
+
+  /// Returns a token for a negation or decrement operator.
+  fn negation_or_decrement(&mut self) -> Token {
+    let start = self.position;
+    let line = self.line;
+
+    // We look ahead to see if the next character is a hyphen. If we have two consecutive hyphens,
+    // we return token for a decrement operator.
+    if self.peek(1) == HYPHEN {
+      self.position += 2;
+
+      return self.token(TokenKind::Decrement, start, line);
+    }
+
+    // Otherwise, we return a negation operator.
+    self.position += 1;
+
+    self.token(TokenKind::Negation, start, line)
   }
 
   /// Returns a token for an underscore.
@@ -436,6 +462,21 @@ mod tests {
   #[test]
   fn lex_newline() {
     assert_kinds(lex("\n\n\n"), vec![Newline, Newline, Newline, Eof]);
+  }
+
+  #[test]
+  fn lex_bitwise_not() {
+    assert_token!("~", BitwiseNot, "~", 1..1, 1..2);
+  }
+
+  #[test]
+  fn lex_decrement() {
+    assert_token!("--", Decrement, "--", 1..1, 1..3);
+  }
+
+  #[test]
+  fn lex_negation() {
+    assert_token!("-", Negation, "-", 1..1, 1..2);
   }
 
   #[test]
