@@ -12,7 +12,7 @@ pub enum TokenKind {
   // Operators.
   BitwiseNot,
   Decrement,
-  Negation,
+  Negate,
 
   // Punctuation.
   ParenOpen,
@@ -43,7 +43,7 @@ impl TokenKind {
       // Operators.
       | TokenKind::BitwiseNot => "a bitwise not operator",
       | TokenKind::Decrement => "a decrement operator",
-      | TokenKind::Negation => "a negation operator",
+      | TokenKind::Negate => "a negate operator",
 
       // Punctuation.
       | TokenKind::ParenOpen => "a '('",

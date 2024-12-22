@@ -139,7 +139,7 @@ impl Lexer<'_> {
     match self.current_byte() {
       | ZERO..=NINE => self.constant(),
       | TILDE => self.bitwise_not(),
-      | HYPHEN => self.negation_or_decrement(),
+      | HYPHEN => self.negate_or_decrement(),
       | SEMICOLON => self.semicolon(),
       | BRACE_OPEN => self.brace_open(),
       | BRACE_CLOSE => self.brace_close(),
@@ -220,8 +220,8 @@ impl Lexer<'_> {
     self.token_single(TokenKind::BitwiseNot)
   }
 
-  /// Returns a token for a negation or decrement operator.
-  fn negation_or_decrement(&mut self) -> Token {
+  /// Returns a token for a negate or decrement operator.
+  fn negate_or_decrement(&mut self) -> Token {
     let start = self.position;
     let line = self.line;
 
@@ -233,10 +233,10 @@ impl Lexer<'_> {
       return self.token(TokenKind::Decrement, start, line);
     }
 
-    // Otherwise, we return a negation operator.
+    // Otherwise, we return a negate operator.
     self.position += 1;
 
-    self.token(TokenKind::Negation, start, line)
+    self.token(TokenKind::Negate, start, line)
   }
 
   /// Returns a token for an underscore.
@@ -475,8 +475,8 @@ mod tests {
   }
 
   #[test]
-  fn lex_negation() {
-    assert_token!("-", Negation, "-", 1..1, 1..2);
+  fn lex_negate() {
+    assert_token!("-", Negate, "-", 1..1, 1..2);
   }
 
   #[test]
