@@ -92,6 +92,7 @@ impl Lowerer {
   ) -> Result<Vec<Instruction>, LoweringError> {
     match expression {
       | ast::Expression::Constant(int) => self.lower_int(int),
+      | ast::Expression::Unary(unary) => unimplemented!("unary: {unary:?}"),
     }
   }
 

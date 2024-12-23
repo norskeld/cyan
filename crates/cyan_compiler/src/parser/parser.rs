@@ -3,8 +3,10 @@
 //! ```ebnf
 //! <program>    ::= <function>
 //! <function>   ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
-//! <statement>  ::= "return" <exp> ";"
-//! <exp>        ::= <int>
+//! <statement>  ::= "return" <expression> ";"
+//! <expression> ::= <int> | <unary-op> <expression> | "(" <expression> ")"
+//! <unary-op>   ::= "-" | "~"
+//!
 //! <identifier> ::= ? An identifier token ?
 //! <int>        ::= ? A constant token ?
 //! ```
@@ -12,7 +14,7 @@
 use thiserror::Error;
 
 use crate::lexer::{Token, TokenKind};
-use crate::span::Span;
+use crate::span::{Span, Spanned};
 use crate::trees::ast;
 
 type Result<T> = std::result::Result<T, ParseError>;
@@ -188,17 +190,17 @@ impl Parser {
 
     self.expect(TokenKind::Semicolon)?;
 
-    Ok(ast::Statement::Return(ast::Expression::Constant(
-      expression,
-    )))
+    Ok(ast::Statement::Return(expression))
   }
 
   /// Parses an expression.
-  fn expression(&mut self) -> Result<ast::Int> {
+  fn expression(&mut self) -> Result<ast::Expression> {
     let token = self.peek();
 
     match token.kind {
       | TokenKind::Constant => self.constant(),
+      | TokenKind::BitwiseNot | TokenKind::Negate => self.unary(),
+      | TokenKind::ParenOpen => self.expression_group(),
       | _ => {
         Err(ParseError::new(
           format!("expected expression, found '{}'", token.value),
@@ -208,8 +210,19 @@ impl Parser {
     }
   }
 
+  /// Parses an expression group.
+  fn expression_group(&mut self) -> Result<ast::Expression> {
+    self.consume()?;
+
+    let expression = self.expression()?;
+
+    self.expect(TokenKind::ParenClose)?;
+
+    Ok(expression)
+  }
+
   /// Parses a constant.
-  fn constant(&mut self) -> Result<ast::Int> {
+  fn constant(&mut self) -> Result<ast::Expression> {
     let token = self.consume()?;
 
     let value = token.value.parse().map_err(|_| {
@@ -219,10 +232,35 @@ impl Parser {
       )
     })?;
 
-    Ok(ast::Int {
+    Ok(ast::Expression::Constant(ast::Int {
       value,
       span: token.span.clone(),
-    })
+    }))
+  }
+
+  /// Parses an unary expression.
+  fn unary(&mut self) -> Result<ast::Expression> {
+    let token = self.consume()?;
+
+    let operator = match token.kind {
+      | TokenKind::BitwiseNot => ast::UnaryOp::BitwiseNot,
+      | TokenKind::Negate => ast::UnaryOp::Negate,
+      | _ => {
+        return Err(ParseError::new(
+          format!("expected unary operator, found '{}'", token.value),
+          token.span.clone(),
+        ))
+      },
+    };
+
+    let expression = self.expression()?;
+    let span = Span::merge(&token.span, &expression.span());
+
+    Ok(ast::Expression::Unary(ast::Unary {
+      operator,
+      expression: Box::new(expression),
+      span,
+    }))
   }
 
   /// Parses an identifier.

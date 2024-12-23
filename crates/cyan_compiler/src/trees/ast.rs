@@ -4,7 +4,8 @@
 //! program    = Program(function)
 //! function   = Function(identifier name, statement body)
 //! statement  = Return(expression)
-//! expression = Constant(int)
+//! expression = Constant(int) | Unary(unary_op, expression)
+//! unary_op   = BitwiseNot | Negate
 //! ```
 
 /// A helper macro that adds a `span` field to an AST node and implements [Spanned] for it.
@@ -90,7 +91,22 @@ spanned! {
   #[derive(Debug, PartialEq, Eq)]
   pub enum Expression {
     Constant(Int),
+    Unary(Unary),
   }
+}
+
+spanned! {
+  #[derive(Debug, PartialEq, Eq)]
+  pub struct Unary {
+    pub operator: UnaryOp,
+    pub expression: Box<Expression>,
+  }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum UnaryOp {
+  BitwiseNot,
+  Negate,
 }
 
 spanned! {

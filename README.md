@@ -6,15 +6,43 @@ Compiler for a subset of C.
 
 ## Trees
 
-AST and Assembly AST (AAST) are described using [Zephyr ASDL][zephyr].
+AST, TAC and Assembly AST (AAST) are described using [Zephyr ASDL][zephyr].
 
 ### AST
+
+Grammar:
+
+```ebnf
+<program>    ::= <function>
+<function>   ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
+<statement>  ::= "return" <expression> ";"
+<expression> ::= <int> | <unary-op> <expression> | "(" <expression> ")"
+<unary-op>   ::= "-" | "~"
+
+<identifier> ::= ? An identifier token ?
+<int>        ::= ? A constant token ?
+```
+
+AST definition:
 
 ```zephyr
 program    = Program(function)
 function   = Function(identifier name, statement body)
 statement  = Return(expression)
-expression = Constant(int)
+expression = Constant(int) | Unary(unary_op, expression)
+unary_op   = BitwiseNot | Negate
+```
+
+### TAC
+
+Three Adress Code (TAC) is a simple IR
+
+```zephyr
+program     = Program(function)
+function    = Function(identifier, instruction* body)
+instruction = Return(value) | Unary(unary_op, value src, value dst)
+value       = Constant(int) | Var(identifier)
+unary_op    = BitwiseNot | Negate
 ```
 
 ### Assembly AST (AAST)
