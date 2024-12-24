@@ -61,13 +61,17 @@ impl Emitter {
       | aast::Instruction::Ret => {
         self.writeln("\tret");
       },
+      | aast::Instruction::Unary { .. } => unimplemented!(),
+      | aast::Instruction::AllocateStack(..) => unimplemented!(),
     }
   }
 
   fn emit_operand(&mut self, operand: &aast::Operand) -> String {
     match operand {
       | aast::Operand::Imm(int) => format!("${int}"),
-      | aast::Operand::Reg => "%eax".to_string(),
+      | aast::Operand::Reg(..) => "%eax".to_string(),
+      | aast::Operand::Pseudo(..) => unimplemented!("pseudoregisters"),
+      | aast::Operand::Stack(..) => unimplemented!("stack"),
     }
   }
 }
