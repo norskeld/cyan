@@ -8,6 +8,8 @@
 //! unary_op   = BitwiseNot | Negate
 //! ```
 
+use internment::Intern;
+
 /// A helper macro that adds a `span` field to an AST node and implements [Spanned] for it.
 macro_rules! spanned {
   // Handle structs.
@@ -119,6 +121,6 @@ spanned! {
 spanned! {
   #[derive(Debug, PartialEq, Eq)]
   pub struct Identifier {
-    pub value: String,
+    pub value: Intern<String>,
   }
 }

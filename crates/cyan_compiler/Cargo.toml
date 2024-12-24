@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.94"
+internment = "0.8.6"
 thiserror = "2.0.4"
 
 [dev-dependencies]

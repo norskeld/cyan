@@ -7,6 +7,7 @@
 //! operand     = Imm(int) | Register
 //! ```
 
+use internment::Intern;
 use thiserror::Error;
 
 use super::ast;
@@ -19,7 +20,7 @@ pub struct Program {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Function {
-  pub name: String,
+  pub name: Intern<String>,
   pub instructions: Vec<Instruction>,
 }
 
@@ -36,7 +37,7 @@ pub enum Operand {
 }
 
 #[derive(Debug, Error)]
-#[error("lowering error [{span}]: {message}")]
+#[error("TAC lowering error [{span}]: {message}")]
 pub struct LoweringError {
   /// The error message.
   pub message: String,
@@ -74,7 +75,7 @@ impl Lowerer {
   }
 
   fn lower_function(&self, function: &ast::Function) -> Result<Function, LoweringError> {
-    let name = function.name.value.clone();
+    let name = function.name.value;
     let instructions = self.lower_statement(&function.body)?;
 
     Ok(Function { name, instructions })

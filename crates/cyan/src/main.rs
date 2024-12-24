@@ -11,6 +11,7 @@ use cyan_compiler::emitter;
 use cyan_compiler::lexer;
 use cyan_compiler::parser;
 use cyan_compiler::trees::aast;
+use cyan_compiler::trees::tac;
 use extensions::WithoutFileExtension;
 
 /// Helper macro to bail on a specified [CompileStage].
@@ -31,6 +32,7 @@ macro_rules! bail_on {
 enum CompileStage {
   Lex,
   Parse,
+  Tac,
   Codegen,
   Link,
 }
@@ -40,6 +42,7 @@ impl fmt::Display for CompileStage {
     let stage = match self {
       | CompileStage::Lex => "Lex",
       | CompileStage::Parse => "Parse",
+      | CompileStage::Tac => "TAC",
       | CompileStage::Codegen => "Codegen",
       | CompileStage::Link => "Link",
     };
@@ -152,6 +155,18 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   }
 
   bail_on!(options, CompileStage::Parse);
+
+  // TAC.
+  let mut tac = tac::Lowerer::new();
+  let tac = tac.lower(&program)?;
+
+  if options.should_print(CompileStage::Tac) {
+    println!("{}", boxed("Stage | Three Address Code (TAC)"));
+    println!("{tac:#?}");
+    println!();
+  }
+
+  bail_on!(options, CompileStage::Tac);
 
   // Codegen.
   let aast = aast::Lowerer::new(program).lower()?;

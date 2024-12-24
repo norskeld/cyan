@@ -35,7 +35,7 @@ unary_op   = BitwiseNot | Negate
 
 ### TAC
 
-Three Adress Code (TAC) is a simple IR
+Three Adress Code (TAC) is a simple IR between the AST and Assembly AST.
 
 ```zephyr
 program     = Program(function)

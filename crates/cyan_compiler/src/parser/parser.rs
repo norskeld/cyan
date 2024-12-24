@@ -275,7 +275,7 @@ impl Parser {
     }
 
     Ok(ast::Identifier {
-      value: token.value,
+      value: token.value.into(),
       span: token.span,
     })
   }
@@ -316,7 +316,7 @@ mod tests {
     let expected = ast::Program {
       function: ast::Function {
         name: ast::Identifier {
-          value: "main".to_string(),
+          value: "main".to_string().into(),
           span: Span::default(),
         },
         body: ast::Statement::Return(ast::Expression::Constant(ast::Int {
