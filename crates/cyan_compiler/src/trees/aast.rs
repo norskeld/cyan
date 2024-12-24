@@ -1,16 +1,36 @@
-//! Assembly AST (AAST) definition using Zephyr ASDL:
+//! Assembly AST (AAST).
 //!
 //! ```zephyr
-//! program     = Program(function)
-//! function    = Function(identifier name, instruction* instructions)
-//! instruction = Mov(operand src, operand dst) | Ret
-//! operand     = Imm(int) | Register
+//! program = Program(function)
+//!
+//! function =
+//!   | Function(identifier name, instruction* instructions)
+//!
+//! instruction =
+//!   | Mov(operand src, operand dst)
+//!   | Unary(unary_op, operand)
+//!   | AllocateStack(int)
+//!   | Ret
+//!
+//! unary_op =
+//!   | Neg
+//!   | Not
+//!
+//! operand =
+//!   | Imm(int)
+//!   | Reg(reg)
+//!   | Pseudo(identifier)
+//!   | Stack(int)
+//!
+//! reg =
+//!   | AX
+//!   | R10
 //! ```
 
 use internment::Intern;
 use thiserror::Error;
 
-use super::ast;
+use super::tac;
 use crate::span::Span;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -27,13 +47,29 @@ pub struct Function {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Instruction {
   Mov { src: Operand, dst: Operand },
+  Unary { operator: UnaryOp, operand: Operand },
+  AllocateStack(isize),
   Ret,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnaryOp {
+  Neg,
+  Not,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operand {
   Imm(isize),
-  Register,
+  Reg(Reg),
+  Pseudo(Intern<String>),
+  Stack(isize),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reg {
+  AX,
+  R10,
 }
 
 #[derive(Debug, Error)]
@@ -54,56 +90,73 @@ impl LoweringError {
   }
 }
 
-pub struct Lowerer {
-  /// The program to lower.
-  program: ast::Program,
-}
+pub struct Lowerer;
 
 impl Lowerer {
-  pub fn new(program: ast::Program) -> Self {
-    Self { program }
+  pub fn new() -> Self {
+    Self
   }
 
-  pub fn lower(&self) -> Result<Program, LoweringError> {
-    self.lower_program(&self.program)
+  pub fn lower(&self, program: &tac::Program) -> Result<Program, LoweringError> {
+    self.lower_program(program)
   }
 
-  fn lower_program(&self, program: &ast::Program) -> Result<Program, LoweringError> {
+  fn lower_program(&self, program: &tac::Program) -> Result<Program, LoweringError> {
     let function = self.lower_function(&program.function)?;
 
     Ok(Program { function })
   }
 
-  fn lower_function(&self, function: &ast::Function) -> Result<Function, LoweringError> {
-    let name = function.name.value;
-    let instructions = self.lower_statement(&function.body)?;
+  fn lower_function(&self, function: &tac::Function) -> Result<Function, LoweringError> {
+    let name = function.name;
+    let instructions = self.lower_instructions(&function.instructions)?;
 
     Ok(Function { name, instructions })
   }
 
-  fn lower_statement(&self, statement: &ast::Statement) -> Result<Vec<Instruction>, LoweringError> {
-    match statement {
-      | ast::Statement::Return(expression) => self.lower_expression(expression),
-    }
-  }
-
-  fn lower_expression(
+  fn lower_instructions(
     &self,
-    expression: &ast::Expression,
+    tac_instructions: &[tac::Instruction],
   ) -> Result<Vec<Instruction>, LoweringError> {
-    match expression {
-      | ast::Expression::Constant(int) => self.lower_int(int),
-      | ast::Expression::Unary(unary) => unimplemented!("unary: {unary:?}"),
+    let mut instructions = Vec::new();
+
+    for instruction in tac_instructions {
+      match instruction {
+        | tac::Instruction::Return { value } => {
+          let src = self.lower_value(value);
+          let dst = Operand::Reg(Reg::AX);
+
+          instructions.push(Instruction::Mov { src, dst });
+          instructions.push(Instruction::Ret);
+        },
+        | tac::Instruction::Unary { operator, src, dst } => {
+          let operator = self.lower_operator(operator);
+          let src = self.lower_value(src);
+          let dst = self.lower_value(dst);
+
+          instructions.push(Instruction::Mov { src, dst });
+          instructions.push(Instruction::Unary {
+            operator,
+            operand: dst,
+          });
+        },
+      }
+    }
+
+    Ok(instructions)
+  }
+
+  fn lower_value(&self, value: &tac::Value) -> Operand {
+    match value {
+      | tac::Value::Constant(int) => Operand::Imm(*int),
+      | tac::Value::Var(identifier) => Operand::Pseudo(*identifier),
     }
   }
 
-  fn lower_int(&self, int: &ast::Int) -> Result<Vec<Instruction>, LoweringError> {
-    Ok(vec![
-      Instruction::Mov {
-        src: Operand::Imm(int.value),
-        dst: Operand::Register,
-      },
-      Instruction::Ret,
-    ])
+  fn lower_operator(&self, operator: &tac::UnaryOp) -> UnaryOp {
+    match operator {
+      | tac::UnaryOp::BitwiseNot => UnaryOp::Not,
+      | tac::UnaryOp::Negate => UnaryOp::Neg,
+    }
   }
 }

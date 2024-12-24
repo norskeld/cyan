@@ -169,7 +169,8 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   bail_on!(options, CompileStage::Tac);
 
   // Codegen.
-  let aast = aast::Lowerer::new(program).lower()?;
+  let aast = aast::Lowerer::new();
+  let aast = aast.lower(&program)?;
   let emitter = emitter::Emitter::new();
   let emitted = emitter.emit(&aast);
 

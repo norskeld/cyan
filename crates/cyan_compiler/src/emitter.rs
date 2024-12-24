@@ -67,7 +67,7 @@ impl Emitter {
   fn emit_operand(&mut self, operand: &aast::Operand) -> String {
     match operand {
       | aast::Operand::Imm(int) => format!("${int}"),
-      | aast::Operand::Register => "%eax".to_string(),
+      | aast::Operand::Reg => "%eax".to_string(),
     }
   }
 }

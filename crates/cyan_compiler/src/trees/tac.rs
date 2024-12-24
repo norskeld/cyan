@@ -1,11 +1,22 @@
-//! Three Address Code (TAC) definition using Zephyr ASDL:
+//! Three Address Code (TAC) definition.
 //!
 //! ```zephyr
-//! program     = Program(function)
-//! function    = Function(identifier name, instruction* instructions)
-//! instruction = Return(value) | Unary(unary_op, value src, value dst)
-//! value       = Constant(int) | Var(identifier)
-//! unary_op    = BitwiseNot | Negate
+//! program = Program(function)
+//!
+//! function =
+//!   | Function(identifier, instruction* body)
+//!
+//! instruction =
+//!   | Return(value)
+//!   | Unary(unary_op, value src, value dst)
+//!
+//! value =
+//!   | Constant(int)
+//!   | Var(identifier)
+//!
+//! unary_op =
+//!   | BitwiseNot
+//!   | Negate
 //! ```
 
 use internment::Intern;
