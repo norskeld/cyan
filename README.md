@@ -4,13 +4,21 @@
 
 Compiler for a subset of C.
 
-## Trees
+## Flowchart
 
-AST, TAC and Assembly AST (AAST) are described using [Zephyr ASDL][zephyr].
+Compiler flowchart:
 
-### AST
+```mermaid
+flowchart LR
+  source.* -->|lex| tokens
+  tokens -->|parse| AST
+  AST -->|lower pass| TAC
+  TAC -->|lower pass| AAST
+  AAST -->|codegen| assembly
+  assembly -->|emit| assembly.s
+```
 
-Grammar:
+## Grammar
 
 ```ebnf
 <program>    ::= <function>
@@ -23,35 +31,81 @@ Grammar:
 <int>        ::= ? A constant token ?
 ```
 
-AST definition:
+## Trees
+
+> [!NOTE]
+> AST, TAC and AAST are described using [Zephyr ASDL][zephyr].
+
+### AST
+
+This is a syntactic tree representation of the C program.
 
 ```zephyr
-program    = Program(function)
-function   = Function(identifier name, statement body)
-statement  = Return(expression)
-expression = Constant(int) | Unary(unary_op, expression)
-unary_op   = BitwiseNot | Negate
+program = Program(function)
+
+function =
+  | Function(identifier name, statement body)
+
+statement =
+  | Return(expression)
+
+expression =
+  | Constant(int)
+  | Unary(unary_op, expression)
+
+unary_op =
+  | BitwiseNot
+  | Negate
 ```
 
-### TAC
+### Three Address Code (TAC)
 
-Three Adress Code (TAC) is a simple IR between the AST and Assembly AST.
+This IR lets us handle structural transformations — like removing nested expressions — separately from the details of assembly language, and it's also well suited for applying some compile-time optimizations.
 
 ```zephyr
-program     = Program(function)
-function    = Function(identifier, instruction* body)
-instruction = Return(value) | Unary(unary_op, value src, value dst)
-value       = Constant(int) | Var(identifier)
-unary_op    = BitwiseNot | Negate
+program = Program(function)
+
+function =
+  | Function(identifier, instruction* body)
+
+instruction =
+  | Return(value)
+  | Unary(unary_op, value src, value dst)
+
+value =
+  | Constant(int)
+  | Var(identifier)
+
+unary_op =
+  | BitwiseNot
+  | Negate
 ```
 
 ### Assembly AST (AAST)
 
+This IR is used to emit assembly code.
+
 ```zephyr
-program     = Program(function)
-function    = Function(identifier name, instruction* instructions)
-instruction = Mov(operand src, operand dst) | Ret
-operand     = Imm(int) | Register
+program = Program(function)
+
+function =
+  | Function(identifier name, instruction* instructions)
+
+instruction =
+  | Mov(operand src, operand dst)
+  | Unary(unary_op, operand)
+  | AllocateStack(int)
+  | Ret
+
+unary_op =
+  | Neg
+  | Not
+
+operand =
+  | Imm(int)
+  | Reg(reg)
+  | Pseudo(identifier)
+  | Stack(int)
 ```
 
 ## Links
