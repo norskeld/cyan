@@ -113,7 +113,11 @@ impl Token {
   pub fn is_binary_operator(&self) -> bool {
     matches!(
       self.kind,
-      TokenKind::Plus | TokenKind::Negate | TokenKind::Multiply | TokenKind::Divide
+      TokenKind::Plus
+        | TokenKind::Negate
+        | TokenKind::Multiply
+        | TokenKind::Divide
+        | TokenKind::Percent
     )
   }
 }
