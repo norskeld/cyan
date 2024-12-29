@@ -131,10 +131,15 @@ impl LoweringPass {
   fn make_binary_op(&self, op: &ast::BinaryOp) -> BinaryOp {
     match op {
       | ast::BinaryOp::Add => BinaryOp::Add,
-      | ast::BinaryOp::Sub => BinaryOp::Sub,
-      | ast::BinaryOp::Mul => BinaryOp::Mul,
+      | ast::BinaryOp::BitAnd => BinaryOp::BitAnd,
+      | ast::BinaryOp::BitOr => BinaryOp::BitOr,
+      | ast::BinaryOp::BitShl => BinaryOp::BitShl,
+      | ast::BinaryOp::BitShr => BinaryOp::BitShr,
+      | ast::BinaryOp::BitXor => BinaryOp::BitXor,
       | ast::BinaryOp::Div => BinaryOp::Div,
       | ast::BinaryOp::Mod => BinaryOp::Mod,
+      | ast::BinaryOp::Mul => BinaryOp::Mul,
+      | ast::BinaryOp::Sub => BinaryOp::Sub,
     }
   }
 }

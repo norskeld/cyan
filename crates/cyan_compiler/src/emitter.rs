@@ -149,15 +149,21 @@ impl Emitter {
 
   fn emit_binary_op(&self, op: &BinaryOp) -> String {
     match op {
+      | BinaryOp::And => "andl".to_string(),
+      | BinaryOp::Or => "orl".to_string(),
+      | BinaryOp::Sal => "sall".to_string(),
+      | BinaryOp::Sar => "sarl".to_string(),
+      | BinaryOp::Xor => "xorl".to_string(),
       | BinaryOp::Add => "addl".to_string(),
-      | BinaryOp::Sub => "subl".to_string(),
       | BinaryOp::Mul => "imull".to_string(),
+      | BinaryOp::Sub => "subl".to_string(),
     }
   }
 
   fn emit_register(&self, register: &Reg) -> String {
     match register {
       | Reg::AX => "%eax".to_string(),
+      | Reg::CX => "%ecx".to_string(),
       | Reg::DX => "%edx".to_string(),
       | Reg::R10 => "%r10d".to_string(),
       | Reg::R11 => "%r11d".to_string(),

@@ -48,8 +48,13 @@ pub enum UnaryOp {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BinaryOp {
   Add,
-  Sub,
+  And,
   Mul,
+  Or,
+  Sal,
+  Sar,
+  Sub,
+  Xor,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -74,6 +79,7 @@ impl fmt::Debug for Operand {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reg {
   AX,
+  CX,
   DX,
   R10,
   R11,
