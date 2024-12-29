@@ -25,11 +25,11 @@ pub enum Instruction {
     dst: Operand,
   },
   Unary {
-    operator: UnaryOp,
+    op: UnaryOp,
     operand: Operand,
   },
   Binary {
-    operator: BinaryOp,
+    op: BinaryOp,
     src: Operand,
     dst: Operand,
   },
@@ -49,7 +49,7 @@ pub enum UnaryOp {
 pub enum BinaryOp {
   Add,
   Sub,
-  Mult,
+  Mul,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

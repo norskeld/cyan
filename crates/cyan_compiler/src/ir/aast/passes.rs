@@ -60,19 +60,16 @@ impl LoweringPass {
           instructions.push(Instruction::Mov { src, dst });
           instructions.push(Instruction::Ret);
         },
-        | tac::Instruction::Unary { operator, src, dst } => {
-          let operator = self.lower_unary_operator(operator);
+        | tac::Instruction::Unary { op, src, dst } => {
+          let op = self.lower_unary_op(op);
           let src = self.lower_value(src);
           let dst = self.lower_value(dst);
 
           instructions.push(Instruction::Mov { src, dst });
-          instructions.push(Instruction::Unary {
-            operator,
-            operand: dst,
-          });
+          instructions.push(Instruction::Unary { op, operand: dst });
         },
         | tac::Instruction::Binary {
-          operator: tac::BinaryOp::Divide,
+          op: tac::BinaryOp::Div,
           left,
           right,
           dst,
@@ -95,7 +92,7 @@ impl LoweringPass {
           ]);
         },
         | tac::Instruction::Binary {
-          operator: tac::BinaryOp::Mod,
+          op: tac::BinaryOp::Mod,
           left,
           right,
           dst,
@@ -118,12 +115,12 @@ impl LoweringPass {
           ]);
         },
         | tac::Instruction::Binary {
-          operator,
+          op,
           left,
           right,
           dst,
         } => {
-          let operator = self.lower_binary_operator(operator)?;
+          let op = self.lower_binary_op(op)?;
           let left = self.lower_value(left);
           let right = self.lower_value(right);
           let dst = self.lower_value(dst);
@@ -131,7 +128,7 @@ impl LoweringPass {
           instructions.extend(vec![
             Instruction::Mov { src: left, dst },
             Instruction::Binary {
-              operator,
+              op,
               src: right,
               dst,
             },
@@ -150,19 +147,19 @@ impl LoweringPass {
     }
   }
 
-  fn lower_unary_operator(&self, operator: &tac::UnaryOp) -> UnaryOp {
-    match operator {
-      | tac::UnaryOp::BitwiseNot => UnaryOp::Not,
+  fn lower_unary_op(&self, op: &tac::UnaryOp) -> UnaryOp {
+    match op {
+      | tac::UnaryOp::BitNot => UnaryOp::Not,
       | tac::UnaryOp::Negate => UnaryOp::Neg,
     }
   }
 
-  fn lower_binary_operator(&self, operator: &tac::BinaryOp) -> Result<BinaryOp, LoweringError> {
-    match operator {
+  fn lower_binary_op(&self, op: &tac::BinaryOp) -> Result<BinaryOp, LoweringError> {
+    match op {
       | tac::BinaryOp::Add => Ok(BinaryOp::Add),
-      | tac::BinaryOp::Subtract => Ok(BinaryOp::Sub),
-      | tac::BinaryOp::Multiply => Ok(BinaryOp::Mult),
-      | tac::BinaryOp::Divide | tac::BinaryOp::Mod => {
+      | tac::BinaryOp::Sub => Ok(BinaryOp::Sub),
+      | tac::BinaryOp::Mul => Ok(BinaryOp::Mul),
+      | tac::BinaryOp::Div | tac::BinaryOp::Mod => {
         Err(LoweringError::new(
           "division cannot be handled like other binary operators",
         ))
@@ -257,18 +254,18 @@ impl PseudoReplacementPass {
 
         Ok(Instruction::Mov { src, dst })
       },
-      | Instruction::Unary { operator, operand } => {
-        let operator = *operator;
+      | Instruction::Unary { op, operand } => {
+        let op = *op;
         let operand = self.replace_operand(operand);
 
-        Ok(Instruction::Unary { operator, operand })
+        Ok(Instruction::Unary { op, operand })
       },
-      | Instruction::Binary { operator, src, dst } => {
-        let operator = *operator;
+      | Instruction::Binary { op, src, dst } => {
+        let op = *op;
         let src = self.replace_operand(src);
         let dst = self.replace_operand(dst);
 
-        Ok(Instruction::Binary { operator, src, dst })
+        Ok(Instruction::Binary { op, src, dst })
       },
       | Instruction::Idiv(operand) => {
         let operand = self.replace_operand(operand);
@@ -328,12 +325,12 @@ impl InstructionFixupError {
 ///   `mov`, like many other instructions, can't have memory addresses as both the source and the
 ///   destination. So we make use of scratch register, specifically R10D, to do the rewriting.
 pub struct InstructionFixupPass {
-  last_stack_slot: isize,
+  stack_size: isize,
 }
 
 impl InstructionFixupPass {
-  pub fn new(last_stack_slot: isize) -> Self {
-    Self { last_stack_slot }
+  pub fn new(stack_size: isize) -> Self {
+    Self { stack_size }
   }
 
   pub fn run(&self, program: &Program) -> Result<Program, InstructionFixupError> {
@@ -347,7 +344,7 @@ impl InstructionFixupPass {
   }
 
   fn fixup_function(&self, function: &Function) -> Result<Function, InstructionFixupError> {
-    let mut instructions = vec![Instruction::AllocateStack(self.last_stack_slot)];
+    let mut instructions = vec![Instruction::AllocateStack(self.stack_size)];
 
     for instruction in &function.instructions {
       instructions.extend(self.fixup_instruction(instruction)?);
@@ -369,67 +366,47 @@ impl InstructionFixupPass {
         src: src @ Operand::Stack(..),
         dst: dst @ Operand::Stack(..),
       } => {
-        let fixed = vec![
-          Instruction::Mov {
-            src,
-            dst: Operand::Reg(Reg::R10),
-          },
-          Instruction::Mov {
-            src: Operand::Reg(Reg::R10),
-            dst,
-          },
-        ];
+        let reg = Operand::Reg(Reg::R10);
 
-        Ok(fixed)
+        Ok(vec![
+          Instruction::Mov { src, dst: reg },
+          Instruction::Mov { src: reg, dst },
+        ])
       },
       // Add/Sub can't use memory addresses for both operands.
       | Instruction::Binary {
-        operator: operator @ (BinaryOp::Add | BinaryOp::Sub),
+        op: op @ (BinaryOp::Add | BinaryOp::Sub),
         src: src @ Operand::Stack(..),
         dst: dst @ Operand::Stack(..),
       } => {
+        let reg = Operand::Reg(Reg::R10);
+
         Ok(vec![
-          Instruction::Mov {
-            src,
-            dst: Operand::Reg(Reg::R10),
-          },
-          Instruction::Binary {
-            operator,
-            src: Operand::Reg(Reg::R10),
-            dst,
-          },
+          Instruction::Mov { src, dst: reg },
+          Instruction::Binary { op, src: reg, dst },
         ])
       },
       // Destination of Mult can't be in memory.
       | Instruction::Binary {
-        operator: BinaryOp::Mult,
+        op: op @ BinaryOp::Mul,
         src,
         dst: dst @ Operand::Stack(..),
       } => {
+        let reg = Operand::Reg(Reg::R11);
+
         Ok(vec![
-          Instruction::Mov {
-            src: dst,
-            dst: Operand::Reg(Reg::R11),
-          },
-          Instruction::Binary {
-            operator: BinaryOp::Mult,
-            src,
-            dst: Operand::Reg(Reg::R11),
-          },
-          Instruction::Mov {
-            src: Operand::Reg(Reg::R11),
-            dst,
-          },
+          Instruction::Mov { src: dst, dst: reg },
+          Instruction::Binary { op, src, dst: reg },
+          Instruction::Mov { src: reg, dst },
         ])
       },
       // Idiv can't operate on constants.
-      | Instruction::Idiv(operand @ Operand::Imm(..)) => {
+      | Instruction::Idiv(src @ Operand::Imm(..)) => {
+        let reg = Operand::Reg(Reg::R10);
+
         Ok(vec![
-          Instruction::Mov {
-            src: operand,
-            dst: Operand::Reg(Reg::R10),
-          },
-          Instruction::Idiv(Operand::Reg(Reg::R10)),
+          Instruction::Mov { src, dst: reg },
+          Instruction::Idiv(reg),
         ])
       },
       | other => Ok(vec![other]),
