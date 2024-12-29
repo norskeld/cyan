@@ -82,36 +82,55 @@ spanned! {
 }
 
 spanned! {
-  #[derive(Debug, PartialEq, Eq)]
+  #[derive(Clone, Debug, PartialEq, Eq)]
   pub enum Expression {
     Constant(Int),
     Unary(Unary),
+    Binary(Binary),
   }
 }
 
 spanned! {
-  #[derive(Debug, PartialEq, Eq)]
+  #[derive(Clone, Debug, PartialEq, Eq)]
   pub struct Unary {
     pub operator: UnaryOp,
     pub expression: Box<Expression>,
   }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnaryOp {
   BitwiseNot,
   Negate,
 }
 
 spanned! {
-  #[derive(Debug, PartialEq, Eq)]
+  #[derive(Clone, Debug, PartialEq, Eq)]
+  pub struct Binary {
+    pub operator: BinaryOp,
+    pub left: Box<Expression>,
+    pub right: Box<Expression>,
+  }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BinaryOp {
+  Add,
+  Subtract,
+  Multiply,
+  Divide,
+  Remainder,
+}
+
+spanned! {
+  #[derive(Clone, Debug, PartialEq, Eq)]
   pub struct Int {
     pub value: isize,
   }
 }
 
 spanned! {
-  #[derive(Debug, PartialEq, Eq)]
+  #[derive(Clone, Debug, PartialEq, Eq)]
   pub struct Identifier {
     pub value: Intern<String>,
   }
