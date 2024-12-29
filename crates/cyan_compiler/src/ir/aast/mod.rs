@@ -1,31 +1,4 @@
-//! Assembly AST (AAST).
-//!
-//! ```zephyr
-//! program = Program(function)
-//!
-//! function =
-//!   | Function(identifier name, instruction* instructions)
-//!
-//! instruction =
-//!   | Mov(operand src, operand dst)
-//!   | Unary(unary_op, operand)
-//!   | AllocateStack(int)
-//!   | Ret
-//!
-//! unary_op =
-//!   | Neg
-//!   | Not
-//!
-//! operand =
-//!   | Imm(int)
-//!   | Reg(reg)
-//!   | Pseudo(identifier)
-//!   | Stack(int)
-//!
-//! reg =
-//!   | AX
-//!   | R10
-//! ```
+//! Assembly AST (AAST) definition.
 
 mod passes;
 

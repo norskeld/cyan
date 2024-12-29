@@ -1,23 +1,4 @@
 //! Three Address Code (TAC) definition.
-//!
-//! ```zephyr
-//! program = Program(function)
-//!
-//! function =
-//!   | Function(identifier, instruction* instructions)
-//!
-//! instruction =
-//!   | Return(value)
-//!   | Unary(unary_op, value src, value dst)
-//!
-//! value =
-//!   | Constant(int)
-//!   | Var(identifier)
-//!
-//! unary_op =
-//!   | BitwiseNot
-//!   | Negate
-//! ```
 
 mod passes;
 
