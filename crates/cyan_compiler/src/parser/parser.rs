@@ -175,7 +175,7 @@ impl Parser {
 
     let expression = self.expression(0)?;
 
-    self.expect(TokenKind::Semicolon)?;
+    self.expect(TokenKind::Semi)?;
 
     Ok(ast::Statement::Return(expression))
   }
@@ -215,8 +215,8 @@ impl Parser {
     let token = self.peek();
 
     match token.kind {
-      | TokenKind::Constant => self.constant(),
-      | TokenKind::BitwiseNot | TokenKind::Negate => self.unary(),
+      | TokenKind::Int => self.constant(),
+      | TokenKind::BitNot | TokenKind::Sub => self.unary(),
       | TokenKind::ParenOpen => self.group(),
       | _ => {
         Err(ParseError::new(
@@ -260,8 +260,8 @@ impl Parser {
     let token = self.consume()?;
 
     let operator = match token.kind {
-      | TokenKind::BitwiseNot => ast::UnaryOp::BitwiseNot,
-      | TokenKind::Negate => ast::UnaryOp::Negate,
+      | TokenKind::BitNot => ast::UnaryOp::BitwiseNot,
+      | TokenKind::Sub => ast::UnaryOp::Negate,
       | _ => {
         return Err(ParseError::new(
           format!("expected unary operator, found '{}'", token.value),
@@ -285,11 +285,11 @@ impl Parser {
     let token = self.consume()?;
 
     let operator = match token.kind {
-      | TokenKind::Plus => ast::BinaryOp::Add,
-      | TokenKind::Negate => ast::BinaryOp::Subtract,
-      | TokenKind::Multiply => ast::BinaryOp::Multiply,
-      | TokenKind::Divide => ast::BinaryOp::Divide,
-      | TokenKind::Percent => ast::BinaryOp::Mod,
+      | TokenKind::Add => ast::BinaryOp::Add,
+      | TokenKind::Sub => ast::BinaryOp::Subtract,
+      | TokenKind::Mul => ast::BinaryOp::Multiply,
+      | TokenKind::Div => ast::BinaryOp::Divide,
+      | TokenKind::Mod => ast::BinaryOp::Mod,
       | _ => {
         return Err(ParseError::new(
           format!("expected binary operator, found '{}'", token.value),
@@ -305,7 +305,7 @@ impl Parser {
   fn identifier(&mut self) -> Result<ast::Identifier> {
     let token = self.consume()?;
 
-    if token.kind != TokenKind::Identifier {
+    if token.kind != TokenKind::Ident {
       return Err(ParseError::new(
         format!("expected identifier, found '{}'", token.value),
         token.span.clone(),
@@ -324,8 +324,8 @@ impl Parser {
   /// Returns `None` if the token is not a binary operator.
   fn precedence(token: &Token) -> Option<usize> {
     match token.kind {
-      | TokenKind::Multiply | TokenKind::Divide | TokenKind::Percent => Some(50),
-      | TokenKind::Plus | TokenKind::Negate => Some(45),
+      | TokenKind::Mul | TokenKind::Div | TokenKind::Mod => Some(50),
+      | TokenKind::Add | TokenKind::Sub => Some(45),
       | _ => None,
     }
   }
@@ -351,14 +351,14 @@ mod tests {
   fn parse_function_definition_parsing() {
     let actual = parse(vec![
       token(TokenKind::IntKw, "int", Span::default()),
-      token(TokenKind::Identifier, "main", Span::default()),
+      token(TokenKind::Ident, "main", Span::default()),
       token(TokenKind::ParenOpen, "(", Span::default()),
       token(TokenKind::VoidKw, "void", Span::default()),
       token(TokenKind::ParenClose, ")", Span::default()),
       token(TokenKind::BraceOpen, "{", Span::default()),
       token(TokenKind::ReturnKw, "return", Span::default()),
-      token(TokenKind::Constant, "5", Span::default()),
-      token(TokenKind::Semicolon, ";", Span::default()),
+      token(TokenKind::Int, "5", Span::default()),
+      token(TokenKind::Semi, ";", Span::default()),
       token(TokenKind::BraceClose, "}", Span::default()),
     ])
     .expect("should parse function definition");
@@ -398,24 +398,24 @@ mod tests {
     //         4   5
     let actual = parse(vec![
       token(TokenKind::IntKw, "int", Span::default()),
-      token(TokenKind::Identifier, "main", Span::default()),
+      token(TokenKind::Ident, "main", Span::default()),
       token(TokenKind::ParenOpen, "(", Span::default()),
       token(TokenKind::VoidKw, "void", Span::default()),
       token(TokenKind::ParenClose, ")", Span::default()),
       token(TokenKind::BraceOpen, "{", Span::default()),
       token(TokenKind::ReturnKw, "return", Span::default()),
-      token(TokenKind::Constant, "1", Span::default()),
-      token(TokenKind::Multiply, "*", Span::default()),
-      token(TokenKind::Constant, "2", Span::default()),
-      token(TokenKind::Negate, "-", Span::default()),
-      token(TokenKind::Constant, "3", Span::default()),
-      token(TokenKind::Multiply, "*", Span::default()),
+      token(TokenKind::Int, "1", Span::default()),
+      token(TokenKind::Mul, "*", Span::default()),
+      token(TokenKind::Int, "2", Span::default()),
+      token(TokenKind::Sub, "-", Span::default()),
+      token(TokenKind::Int, "3", Span::default()),
+      token(TokenKind::Mul, "*", Span::default()),
       token(TokenKind::ParenOpen, "(", Span::default()),
-      token(TokenKind::Constant, "4", Span::default()),
-      token(TokenKind::Plus, "+", Span::default()),
-      token(TokenKind::Constant, "5", Span::default()),
+      token(TokenKind::Int, "4", Span::default()),
+      token(TokenKind::Add, "+", Span::default()),
+      token(TokenKind::Int, "5", Span::default()),
       token(TokenKind::ParenClose, ")", Span::default()),
-      token(TokenKind::Semicolon, ";", Span::default()),
+      token(TokenKind::Semi, ";", Span::default()),
       token(TokenKind::BraceClose, "}", Span::default()),
     ])
     .expect("should parse function definition");
@@ -485,14 +485,14 @@ mod tests {
   fn parse_function_definition_missing_brace() {
     let result = parse(vec![
       token(TokenKind::IntKw, "int", Span::default()),
-      token(TokenKind::Identifier, "main", Span::default()),
+      token(TokenKind::Ident, "main", Span::default()),
       token(TokenKind::ParenOpen, "(", Span::default()),
       token(TokenKind::VoidKw, "void", Span::default()),
       token(TokenKind::ParenClose, ")", Span::default()),
       // Missing opening brace
       token(TokenKind::ReturnKw, "return", Span::default()),
-      token(TokenKind::Constant, "5", Span::default()),
-      token(TokenKind::Semicolon, ";", Span::default()),
+      token(TokenKind::Int, "5", Span::default()),
+      token(TokenKind::Semi, ";", Span::default()),
       token(TokenKind::BraceClose, "}", Span::default()),
     ]);
 
@@ -515,7 +515,7 @@ mod tests {
   fn parse_unexpected_end_of_input() {
     let result = parse(vec![
       token(TokenKind::IntKw, "int", Span::default()),
-      token(TokenKind::Identifier, "main", Span::default()),
+      token(TokenKind::Ident, "main", Span::default()),
       token(TokenKind::ParenOpen, "(", Span::default()),
     ]);
 
