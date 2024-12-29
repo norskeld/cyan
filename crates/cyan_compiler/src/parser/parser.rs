@@ -1,16 +1,3 @@
-//! Grammar definition using EBNF:
-//!
-//! ```ebnf
-//! <program>    ::= <function>
-//! <function>   ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
-//! <statement>  ::= "return" <expression> ";"
-//! <expression> ::= <int> | <unary-op> <expression> | "(" <expression> ")"
-//! <unary-op>   ::= "-" | "~"
-//!
-//! <identifier> ::= ? An identifier token ?
-//! <int>        ::= ? A constant token ?
-//! ```
-
 use thiserror::Error;
 
 use crate::ir::ast;

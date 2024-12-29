@@ -1,22 +1,4 @@
 //! AST definition.
-//!
-//! ```zephyr
-//! program = Program(function)
-//!
-//! function =
-//!   | Function(identifier name, statement body)
-//!
-//! statement =
-//!   | Return(expression)
-//!
-//! expression =
-//!   | Constant(int)
-//!   | Unary(unary_op, expression)
-//!
-//! unary_op =
-//!   | BitwiseNot
-//!   | Negate
-//! ```
 
 use internment::Intern;
 
