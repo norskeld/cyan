@@ -8,10 +8,10 @@ use std::process::Command;
 
 use clap::{Parser, ValueEnum};
 use cyan_compiler::emitter;
+use cyan_compiler::ir::aast;
+use cyan_compiler::ir::tac;
 use cyan_compiler::lexer;
 use cyan_compiler::parser;
-use cyan_compiler::trees::aast;
-use cyan_compiler::trees::tac;
 use extensions::WithoutFileExtension;
 
 /// Helper macro to bail on a specified [CompileStage].
@@ -34,6 +34,7 @@ enum CompileStage {
   Parse,
   Tac,
   Codegen,
+  Emit,
   Link,
 }
 
@@ -44,6 +45,7 @@ impl fmt::Display for CompileStage {
       | CompileStage::Parse => "Parse",
       | CompileStage::Tac => "TAC",
       | CompileStage::Codegen => "Codegen",
+      | CompileStage::Emit => "Emit",
       | CompileStage::Link => "Link",
     };
 
@@ -157,8 +159,8 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   bail_on!(options, CompileStage::Parse);
 
   // TAC.
-  let mut tac = tac::Lowerer::new();
-  let tac = tac.lower(&program)?;
+  let mut lowerer = tac::LoweringPass::new();
+  let tac = lowerer.lower(&program)?;
 
   if options.should_print(CompileStage::Tac) {
     println!("{}", boxed("Stage | Three Address Code (TAC)"));
@@ -168,25 +170,44 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
 
   bail_on!(options, CompileStage::Tac);
 
+  // -----------------------------------------------------------------------------------------------
   // Codegen.
-  let aast = aast::Lowerer::new();
-  let aast = aast.lower(&tac)?;
-  let emitter = emitter::Emitter::new();
-  let emitted = emitter.emit(&aast);
+
+  // Lower TAC to AAST.
+  let lowerer = aast::LoweringPass::new();
+  let aast = lowerer.lower(&tac)?;
+
+  // Replace pseudoregisters and get the stack size.
+  let mut pass = aast::PseudoReplacementPass::new();
+  let (aast, stack_size) = pass.run(&aast)?;
+
+  // Fix up instructions.
+  let pass = aast::InstructionFixupPass::new(stack_size);
+  let aast = pass.run(&aast)?;
 
   if options.should_print(CompileStage::Codegen) {
     println!("{}", boxed("Stage | Codegen (AAST)"));
+    println!("stack_size = {stack_size}");
     println!("{aast:#?}");
-    println!();
-
-    println!("{}", boxed("Stage | Codegen (Assembly)"));
-    println!("{}", String::from_utf8_lossy(&emitted));
     println!();
   }
 
   bail_on!(options, CompileStage::Codegen);
 
-  fs::write(&assembly, emitted)
+  // Emit assembly.
+  let emitter = emitter::Emitter::new();
+  let emitted = emitter.emit(&aast);
+
+  if options.should_print(CompileStage::Codegen) {
+    println!("{}", boxed("Stage | Emission (Assembly)"));
+    println!("{}", &emitted.to_string());
+    println!();
+  }
+
+  bail_on!(options, CompileStage::Emit);
+
+  // Write assembly to file.
+  fs::write(&assembly, emitted.into_bytes())
     .map_err(|_| anyhow::anyhow!("Failed to write assembly file: {}", assembly.display()))?;
 
   // Link.

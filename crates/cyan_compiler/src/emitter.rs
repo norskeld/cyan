@@ -1,77 +1,135 @@
-use crate::trees::aast;
+use std::fmt;
+
+use crate::ir::aast::*;
+
+#[derive(Debug, Default)]
+pub struct Output {
+  bytes: Vec<u8>,
+}
+
+impl Output {
+  /// Creates a new output.
+  pub fn new() -> Self {
+    Self { bytes: Vec::new() }
+  }
+
+  /// Writes a string to the output.
+  pub fn write(&mut self, text: impl AsRef<str>) {
+    self.bytes.extend(text.as_ref().as_bytes());
+  }
+
+  /// Writes a newline to the output.
+  pub fn writeln(&mut self, text: impl AsRef<str>) {
+    self.write(text);
+    self.write("\n");
+  }
+
+  /// Returns the output as a byte vector.
+  pub fn into_bytes(self) -> Vec<u8> {
+    self.bytes
+  }
+
+  pub fn as_bytes(&self) -> &[u8] {
+    &self.bytes
+  }
+}
+
+impl fmt::Display for Output {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", String::from_utf8_lossy(&self.bytes))
+  }
+}
 
 #[derive(Debug, Default)]
 pub struct Emitter {
-  output: Vec<u8>,
+  output: Output,
 }
 
 impl Emitter {
   pub fn new() -> Self {
-    Self { output: Vec::new() }
+    Self {
+      output: Output::new(),
+    }
   }
 
-  pub fn emit(mut self, program: &aast::Program) -> Vec<u8> {
+  pub fn emit(mut self, program: &Program) -> Output {
     self.emit_program(program);
 
     self.output
   }
-
-  fn write(&mut self, text: impl AsRef<str>) {
-    self.output.extend(text.as_ref().as_bytes());
-  }
-
-  fn writeln(&mut self, text: impl AsRef<str>) {
-    self.write(text);
-    self.write("\n");
-  }
 }
 
 impl Emitter {
-  fn emit_program(&mut self, program: &aast::Program) {
+  fn emit_program(&mut self, program: &Program) {
     self.emit_function(&program.function);
 
     if cfg!(target_os = "linux") {
-      self.writeln(".section .note.GNU-stack,\"\",@progbits\n");
+      self
+        .output
+        .writeln(".section .note.GNU-stack,\"\",@progbits\n");
     }
   }
 
-  fn emit_function(&mut self, function: &aast::Function) {
+  fn emit_function(&mut self, function: &Function) {
     let name = if cfg!(target_os = "macos") {
       format!("_{}", function.name)
     } else {
       function.name.to_string()
     };
 
-    self.writeln(format!(".globl {name}\n"));
-    self.writeln(format!("{name}:"));
+    self.output.writeln(format!(".globl {name}\n"));
+    self.output.writeln(format!("{name}:"));
+
+    // Emit function prologue.
+    self.output.writeln("\tpushq %rbp");
+    self.output.writeln("\tmovq %rsp, %rbp");
 
     for instruction in &function.instructions {
       self.emit_instruction(instruction);
     }
   }
 
-  fn emit_instruction(&mut self, instruction: &aast::Instruction) {
+  fn emit_instruction(&mut self, instruction: &Instruction) {
     match instruction {
-      | aast::Instruction::Mov { src, dst } => {
+      | Instruction::Mov { src, dst } => {
         let src = self.emit_operand(src);
         let dst = self.emit_operand(dst);
 
-        self.writeln(format!("\tmovl {src}, {dst}"));
+        self.output.writeln(format!("\tmovl {src}, {dst}"));
       },
-      | aast::Instruction::Ret => {
-        self.writeln("\tret");
+      | Instruction::Ret => {
+        // Emit function epilogue.
+        self.output.writeln("\tmovq %rbp, %rsp");
+        self.output.writeln("\tpopq %rbp");
+
+        self.output.writeln("\tret");
       },
-      | aast::Instruction::Unary { .. } => unimplemented!(),
-      | aast::Instruction::AllocateStack(..) => unimplemented!(),
+      | Instruction::Unary { operator, operand } => {
+        let operator = self.emit_unary_operator(operator);
+        let operand = self.emit_operand(operand);
+
+        self.output.writeln(format!("\t{operator} {operand}"));
+      },
+      | Instruction::AllocateStack(size) => {
+        self.output.writeln(format!("\tsubq ${size}, %rsp"));
+      },
     }
   }
 
-  fn emit_operand(&mut self, operand: &aast::Operand) -> String {
+  fn emit_unary_operator(&self, operator: &UnaryOp) -> String {
+    match operator {
+      | UnaryOp::Neg => "negl".to_string(),
+      | UnaryOp::Not => "notl".to_string(),
+    }
+  }
+
+  fn emit_operand(&mut self, operand: &Operand) -> String {
     match operand {
-      | aast::Operand::Imm(int) => format!("${int}"),
-      | aast::Operand::Reg(..) => "%eax".to_string(),
-      | aast::Operand::Pseudo(..) => unimplemented!("pseudoregisters"),
-      | aast::Operand::Stack(..) => unimplemented!("stack"),
+      | Operand::Imm(int) => format!("${int}"),
+      | Operand::Reg(Reg::AX) => "%eax".to_string(),
+      | Operand::Reg(Reg::R10) => "%r10d".to_string(),
+      | Operand::Stack(offset) => format!("{offset}(%rbp)"),
+      | Operand::Pseudo(..) => unreachable!("unexpected pseudoregister"),
     }
   }
 }

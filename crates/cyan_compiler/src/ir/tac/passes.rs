@@ -1,64 +1,7 @@
-//! Three Address Code (TAC) definition.
-//!
-//! ```zephyr
-//! program = Program(function)
-//!
-//! function =
-//!   | Function(identifier, instruction* body)
-//!
-//! instruction =
-//!   | Return(value)
-//!   | Unary(unary_op, value src, value dst)
-//!
-//! value =
-//!   | Constant(int)
-//!   | Var(identifier)
-//!
-//! unary_op =
-//!   | BitwiseNot
-//!   | Negate
-//! ```
-
-use internment::Intern;
 use thiserror::Error;
 
-use super::ast;
-use crate::span::Span;
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Program {
-  pub function: Function,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Function {
-  pub name: Intern<String>,
-  pub instructions: Vec<Instruction>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Instruction {
-  Return {
-    value: Value,
-  },
-  Unary {
-    operator: UnaryOp,
-    src: Value,
-    dst: Value,
-  },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Value {
-  Constant(isize),
-  Var(Intern<String>),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UnaryOp {
-  BitwiseNot,
-  Negate,
-}
+use crate::ir::ast;
+use crate::ir::tac::*;
 
 #[derive(Debug, Error)]
 #[error("AST lowering error [{span}]: {message}")]
@@ -78,15 +21,17 @@ impl LoweringError {
   }
 }
 
-/// AST to TAC lowerer.
-pub struct Lowerer {
+/// Pass to transform (lower) AST to TAC.
+///
+/// This pass lowers AST to TAC by either transforming or compacting each AST node into TAC nodes.
+pub struct LoweringPass {
   /// The global counter for temporary variables.
   var_counter: usize,
   /// The prefix for temporary variables, equals to function's name.
   var_prefix: Intern<String>,
 }
 
-impl Lowerer {
+impl LoweringPass {
   pub fn new() -> Self {
     Self {
       var_counter: 0,
@@ -116,9 +61,7 @@ impl Lowerer {
 
     Ok(Function { name, instructions })
   }
-}
 
-impl Lowerer {
   fn emit_statement_instructions(
     &mut self,
     statement: &ast::Statement,

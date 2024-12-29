@@ -5,6 +5,7 @@ use rayon::prelude::*;
 
 #[test]
 fn test_compiler() {
+  // (name, suite, should_succeed)
   let suites = vec![
     ("valid", "tests/fixtures/valid", true),
     ("invalid_lex", "tests/fixtures/invalid_lex", false),

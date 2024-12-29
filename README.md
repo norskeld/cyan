@@ -4,20 +4,6 @@
 
 Compiler for a subset of C.
 
-## Flowchart
-
-Compiler flowchart:
-
-```mermaid
-flowchart LR
-  source.* -->|lex| tokens
-  tokens -->|parse| AST
-  AST -->|lower pass| TAC
-  TAC -->|lower pass| AAST
-  AAST -->|codegen| assembly
-  assembly -->|emit| assembly.s
-```
-
 ## Grammar
 
 ```ebnf
@@ -31,14 +17,14 @@ flowchart LR
 <int>        ::= ? A constant token ?
 ```
 
-## Trees
+## Trees and IRs
 
 > [!NOTE]
 > AST, TAC and AAST are described using [Zephyr ASDL][zephyr].
 
 ### AST
 
-This is a syntactic tree representation of the C program.
+This is a syntax tree representation of a C program.
 
 ```zephyr
 program = Program(function)
@@ -66,7 +52,7 @@ This IR lets us handle structural transformations — like removing nested expre
 program = Program(function)
 
 function =
-  | Function(identifier, instruction* body)
+  | Function(identifier, instruction* instructions)
 
 instruction =
   | Return(value)

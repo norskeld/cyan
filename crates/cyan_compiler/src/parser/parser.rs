@@ -13,9 +13,9 @@
 
 use thiserror::Error;
 
+use crate::ir::ast;
 use crate::lexer::{Token, TokenKind};
 use crate::span::{Span, Spanned};
-use crate::trees::ast;
 
 type Result<T> = std::result::Result<T, ParseError>;
 
@@ -254,7 +254,7 @@ impl Parser {
     };
 
     let expression = self.expression()?;
-    let span = Span::merge(&token.span, &expression.span());
+    let span = Span::merge(&token.span, expression.span());
 
     Ok(ast::Expression::Unary(ast::Unary {
       operator,
@@ -284,9 +284,9 @@ impl Parser {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::ir::ast;
   use crate::lexer::Token;
   use crate::span::Span;
-  use crate::trees::ast;
 
   fn token(kind: TokenKind, value: &str, span: Span) -> Token {
     Token::new(kind, value.to_string(), span)

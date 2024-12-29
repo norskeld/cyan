@@ -1,0 +1,73 @@
+//! Three Address Code (TAC) definition.
+//!
+//! ```zephyr
+//! program = Program(function)
+//!
+//! function =
+//!   | Function(identifier, instruction* instructions)
+//!
+//! instruction =
+//!   | Return(value)
+//!   | Unary(unary_op, value src, value dst)
+//!
+//! value =
+//!   | Constant(int)
+//!   | Var(identifier)
+//!
+//! unary_op =
+//!   | BitwiseNot
+//!   | Negate
+//! ```
+
+mod passes;
+
+use std::fmt;
+
+use internment::Intern;
+pub use passes::*;
+
+use crate::span::Span;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Program {
+  pub function: Function,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Function {
+  pub name: Intern<String>,
+  pub instructions: Vec<Instruction>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Instruction {
+  Return {
+    value: Value,
+  },
+  Unary {
+    operator: UnaryOp,
+    src: Value,
+    dst: Value,
+  },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Value {
+  Constant(isize),
+  Var(Intern<String>),
+}
+
+impl fmt::Debug for Value {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      | Value::Constant(int) => write!(f, "Constant({int})"),
+      | Value::Var(identifier) => write!(f, "Var({identifier})"),
+    }
+  }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnaryOp {
+  BitwiseNot,
+  Negate,
+}
