@@ -173,7 +173,7 @@ impl Parser {
   fn return_statement(&mut self) -> Result<ast::Statement> {
     self.consume()?;
 
-    let expression = self.expression()?;
+    let expression = self.expression(0)?;
 
     self.expect(TokenKind::Semicolon)?;
 
@@ -181,25 +181,30 @@ impl Parser {
   }
 
   /// Parses an expression.
-  fn expression(&mut self) -> Result<ast::Expression> {
+  fn expression(&mut self, min_precedence: usize) -> Result<ast::Expression> {
     let mut left = self.factor()?;
     let mut next = self.peek();
 
     while next.is_binary_operator() {
-      let operator = self.binary()?;
-      let right = self.factor()?;
+      match Self::precedence(&next) {
+        | Some(precedence) if precedence >= min_precedence => {
+          let operator = self.binary()?;
+          let right = self.expression(precedence + 1)?;
 
-      let left_span = left.span().clone();
-      let right_span = right.span().clone();
+          let left_span = left.span().clone();
+          let right_span = right.span().clone();
 
-      left = ast::Expression::Binary(ast::Binary {
-        operator,
-        left: Box::new(left),
-        right: Box::new(right),
-        span: Span::merge(&left_span, &right_span),
-      });
+          left = ast::Expression::Binary(ast::Binary {
+            operator,
+            left: Box::new(left),
+            right: Box::new(right),
+            span: Span::merge(&left_span, &right_span),
+          });
 
-      next = self.peek();
+          next = self.peek();
+        },
+        | _ => break,
+      }
     }
 
     Ok(left)
@@ -212,7 +217,7 @@ impl Parser {
     match token.kind {
       | TokenKind::Constant => self.constant(),
       | TokenKind::BitwiseNot | TokenKind::Negate => self.unary(),
-      | TokenKind::ParenOpen => self.expression_group(),
+      | TokenKind::ParenOpen => self.group(),
       | _ => {
         Err(ParseError::new(
           format!("expected expression, found '{}'", token.value),
@@ -223,10 +228,10 @@ impl Parser {
   }
 
   /// Parses an expression group.
-  fn expression_group(&mut self) -> Result<ast::Expression> {
+  fn group(&mut self) -> Result<ast::Expression> {
     self.consume()?;
 
-    let expression = self.expression()?;
+    let expression = self.expression(0)?;
 
     self.expect(TokenKind::ParenClose)?;
 
@@ -312,6 +317,18 @@ impl Parser {
       span: token.span,
     })
   }
+
+  /// Returns the precedence of the given token. The higher the precedence number, the higher the
+  /// binding power.
+  ///
+  /// Returns `None` if the token is not a binary operator.
+  fn precedence(token: &Token) -> Option<usize> {
+    match token.kind {
+      | TokenKind::Multiply | TokenKind::Divide | TokenKind::Percent => Some(50),
+      | TokenKind::Plus | TokenKind::Negate => Some(45),
+      | _ => None,
+    }
+  }
 }
 
 #[cfg(test)]
@@ -331,7 +348,7 @@ mod tests {
   }
 
   #[test]
-  fn test_function_definition_parsing() {
+  fn parse_function_definition_parsing() {
     let actual = parse(vec![
       token(TokenKind::IntKw, "int", Span::default()),
       token(TokenKind::Identifier, "main", Span::default()),
@@ -365,7 +382,96 @@ mod tests {
   }
 
   #[test]
-  fn test_empty_program() {
+  fn parse_precedence() {
+    // Original:  1 * 2  -  3 * (4 + 5)
+    // Grouped:  (1 * 2) - (3 * (4 + 5))
+    //                   ^ root
+    // Tree:
+    //
+    //      -
+    //     / \
+    //    /   \
+    //   * *
+    //  / \   / \
+    // 1  2  3   +
+    //          / \
+    //         4   5
+    let actual = parse(vec![
+      token(TokenKind::IntKw, "int", Span::default()),
+      token(TokenKind::Identifier, "main", Span::default()),
+      token(TokenKind::ParenOpen, "(", Span::default()),
+      token(TokenKind::VoidKw, "void", Span::default()),
+      token(TokenKind::ParenClose, ")", Span::default()),
+      token(TokenKind::BraceOpen, "{", Span::default()),
+      token(TokenKind::ReturnKw, "return", Span::default()),
+      token(TokenKind::Constant, "1", Span::default()),
+      token(TokenKind::Multiply, "*", Span::default()),
+      token(TokenKind::Constant, "2", Span::default()),
+      token(TokenKind::Negate, "-", Span::default()),
+      token(TokenKind::Constant, "3", Span::default()),
+      token(TokenKind::Multiply, "*", Span::default()),
+      token(TokenKind::ParenOpen, "(", Span::default()),
+      token(TokenKind::Constant, "4", Span::default()),
+      token(TokenKind::Plus, "+", Span::default()),
+      token(TokenKind::Constant, "5", Span::default()),
+      token(TokenKind::ParenClose, ")", Span::default()),
+      token(TokenKind::Semicolon, ";", Span::default()),
+      token(TokenKind::BraceClose, "}", Span::default()),
+    ])
+    .expect("should parse function definition");
+
+    let expected = ast::Program {
+      function: ast::Function {
+        name: ast::Identifier {
+          value: "main".to_string().into(),
+          span: Span::default(),
+        },
+        body: ast::Statement::Return(ast::Expression::Binary(ast::Binary {
+          operator: ast::BinaryOp::Subtract,
+          left: Box::new(ast::Expression::Binary(ast::Binary {
+            operator: ast::BinaryOp::Multiply,
+            left: Box::new(ast::Expression::Constant(ast::Int {
+              value: 1,
+              span: Span::default(),
+            })),
+            right: Box::new(ast::Expression::Constant(ast::Int {
+              value: 2,
+              span: Span::default(),
+            })),
+            span: Span::default(),
+          })),
+          right: Box::new(ast::Expression::Binary(ast::Binary {
+            operator: ast::BinaryOp::Multiply,
+            left: Box::new(ast::Expression::Constant(ast::Int {
+              value: 3,
+              span: Span::default(),
+            })),
+            right: Box::new(ast::Expression::Binary(ast::Binary {
+              operator: ast::BinaryOp::Add,
+              left: Box::new(ast::Expression::Constant(ast::Int {
+                value: 4,
+                span: Span::default(),
+              })),
+              right: Box::new(ast::Expression::Constant(ast::Int {
+                value: 5,
+                span: Span::default(),
+              })),
+              span: Span::default(),
+            })),
+            span: Span::default(),
+          })),
+          span: Span::default(),
+        })),
+        span: Span::default(),
+      },
+      span: Span::default(),
+    };
+
+    assert_eq!(actual, expected);
+  }
+
+  #[test]
+  fn parse_empty_program() {
     let result = parse(vec![]);
 
     assert!(result.is_err());
@@ -376,7 +482,7 @@ mod tests {
   }
 
   #[test]
-  fn test_function_definition_missing_brace() {
+  fn parse_function_definition_missing_brace() {
     let result = parse(vec![
       token(TokenKind::IntKw, "int", Span::default()),
       token(TokenKind::Identifier, "main", Span::default()),
@@ -398,7 +504,7 @@ mod tests {
   }
 
   #[test]
-  fn test_invalid_token() {
+  fn parse_invalid_token() {
     let result = parse(vec![token(TokenKind::Invalid, "@", Span::default())]);
 
     assert!(result.is_err());
@@ -406,7 +512,7 @@ mod tests {
   }
 
   #[test]
-  fn test_unexpected_end_of_input() {
+  fn parse_unexpected_end_of_input() {
     let result = parse(vec![
       token(TokenKind::IntKw, "int", Span::default()),
       token(TokenKind::Identifier, "main", Span::default()),
