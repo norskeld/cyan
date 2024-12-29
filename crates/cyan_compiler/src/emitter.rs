@@ -104,21 +104,21 @@ impl Emitter {
 
         self.output.writeln("\tret");
       },
-      | Instruction::Unary { operator, operand } => {
-        let operator = self.emit_unary_operator(operator);
+      | Instruction::Unary { op, operand } => {
+        let op = self.emit_unary_op(op);
         let operand = self.emit_operand(operand);
 
-        self.output.writeln(format!("\t{operator} {operand}"));
+        self.output.writeln(format!("\t{op} {operand}"));
       },
       | Instruction::AllocateStack(size) => {
         self.output.writeln(format!("\tsubq ${size}, %rsp"));
       },
-      | Instruction::Binary { operator, src, dst } => {
-        let operator = self.emit_binary_operator(operator);
+      | Instruction::Binary { op, src, dst } => {
+        let op = self.emit_binary_op(op);
         let src = self.emit_operand(src);
         let dst = self.emit_operand(dst);
 
-        self.output.writeln(format!("\t{operator} {src}, {dst}"));
+        self.output.writeln(format!("\t{op} {src}, {dst}"));
       },
       | Instruction::Idiv(operand) => {
         let operand = self.emit_operand(operand);
@@ -140,18 +140,18 @@ impl Emitter {
     }
   }
 
-  fn emit_unary_operator(&self, operator: &UnaryOp) -> String {
-    match operator {
+  fn emit_unary_op(&self, op: &UnaryOp) -> String {
+    match op {
       | UnaryOp::Neg => "negl".to_string(),
       | UnaryOp::Not => "notl".to_string(),
     }
   }
 
-  fn emit_binary_operator(&self, operator: &BinaryOp) -> String {
-    match operator {
+  fn emit_binary_op(&self, op: &BinaryOp) -> String {
+    match op {
       | BinaryOp::Add => "addl".to_string(),
       | BinaryOp::Sub => "subl".to_string(),
-      | BinaryOp::Mult => "imull".to_string(),
+      | BinaryOp::Mul => "imull".to_string(),
     }
   }
 

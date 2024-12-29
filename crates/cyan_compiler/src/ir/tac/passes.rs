@@ -54,12 +54,14 @@ impl LoweringPass {
     // instructions' temporary variables names are "scoped".
     self.var_prefix = function.name.value;
 
-    let name = function.name.value;
     let mut instructions = Vec::new();
 
     self.emit_statement_instructions(&function.body, &mut instructions)?;
 
-    Ok(Function { name, instructions })
+    Ok(Function {
+      name: function.name.value,
+      instructions,
+    })
   }
 
   fn emit_statement_instructions(
@@ -86,22 +88,22 @@ impl LoweringPass {
     match expression {
       | ast::Expression::Constant(int) => Value::Constant(int.value),
       | ast::Expression::Unary(unary) => {
-        let operator = self.make_unary_op(&unary.operator);
+        let op = self.make_unary_op(&unary.op);
         let src = self.emit_tac(&unary.expression, instructions);
         let dst = Value::Var(self.make_temporary().into());
 
-        instructions.push(Instruction::Unary { operator, src, dst });
+        instructions.push(Instruction::Unary { op, src, dst });
 
         dst
       },
       | ast::Expression::Binary(binary) => {
-        let operator = self.make_binary_op(&binary.operator);
+        let op = self.make_binary_op(&binary.op);
         let left = self.emit_tac(&binary.left, instructions);
         let right = self.emit_tac(&binary.right, instructions);
         let dst = Value::Var(self.make_temporary().into());
 
         instructions.push(Instruction::Binary {
-          operator,
+          op,
           left,
           right,
           dst,
@@ -119,19 +121,19 @@ impl LoweringPass {
     name
   }
 
-  fn make_unary_op(&self, operator: &ast::UnaryOp) -> UnaryOp {
-    match operator {
-      | ast::UnaryOp::BitwiseNot => UnaryOp::BitwiseNot,
+  fn make_unary_op(&self, op: &ast::UnaryOp) -> UnaryOp {
+    match op {
+      | ast::UnaryOp::BitNot => UnaryOp::BitNot,
       | ast::UnaryOp::Negate => UnaryOp::Negate,
     }
   }
 
-  fn make_binary_op(&self, operator: &ast::BinaryOp) -> BinaryOp {
-    match operator {
+  fn make_binary_op(&self, op: &ast::BinaryOp) -> BinaryOp {
+    match op {
       | ast::BinaryOp::Add => BinaryOp::Add,
-      | ast::BinaryOp::Subtract => BinaryOp::Subtract,
-      | ast::BinaryOp::Multiply => BinaryOp::Multiply,
-      | ast::BinaryOp::Divide => BinaryOp::Divide,
+      | ast::BinaryOp::Sub => BinaryOp::Sub,
+      | ast::BinaryOp::Mul => BinaryOp::Mul,
+      | ast::BinaryOp::Div => BinaryOp::Div,
       | ast::BinaryOp::Mod => BinaryOp::Mod,
     }
   }

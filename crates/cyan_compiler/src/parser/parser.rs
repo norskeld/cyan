@@ -188,14 +188,14 @@ impl Parser {
     while next.is_binary_operator() {
       match Self::precedence(next) {
         | Some(precedence) if precedence >= min_precedence => {
-          let operator = self.binary()?;
+          let op = self.binary()?;
           let right = self.expression(precedence + 1)?;
 
           let left_span = left.span().clone();
           let right_span = right.span().clone();
 
           left = ast::Expression::Binary(ast::Binary {
-            operator,
+            op,
             left: Box::new(left),
             right: Box::new(right),
             span: Span::merge(&left_span, &right_span),
@@ -259,8 +259,8 @@ impl Parser {
   fn unary(&mut self) -> Result<ast::Expression> {
     let token = self.consume()?;
 
-    let operator = match token.kind {
-      | TokenKind::BitNot => ast::UnaryOp::BitwiseNot,
+    let op = match token.kind {
+      | TokenKind::BitNot => ast::UnaryOp::BitNot,
       | TokenKind::Sub => ast::UnaryOp::Negate,
       | _ => {
         return Err(ParseError::new(
@@ -274,7 +274,7 @@ impl Parser {
     let span = Span::merge(&token.span, expression.span());
 
     Ok(ast::Expression::Unary(ast::Unary {
-      operator,
+      op,
       expression: Box::new(expression),
       span,
     }))
@@ -284,11 +284,11 @@ impl Parser {
   fn binary(&mut self) -> Result<ast::BinaryOp> {
     let token = self.consume()?;
 
-    let operator = match token.kind {
+    let op = match token.kind {
       | TokenKind::Add => ast::BinaryOp::Add,
-      | TokenKind::Sub => ast::BinaryOp::Subtract,
-      | TokenKind::Mul => ast::BinaryOp::Multiply,
-      | TokenKind::Div => ast::BinaryOp::Divide,
+      | TokenKind::Sub => ast::BinaryOp::Sub,
+      | TokenKind::Mul => ast::BinaryOp::Mul,
+      | TokenKind::Div => ast::BinaryOp::Div,
       | TokenKind::Mod => ast::BinaryOp::Mod,
       | _ => {
         return Err(ParseError::new(
@@ -298,11 +298,11 @@ impl Parser {
       },
     };
 
-    Ok(operator)
+    Ok(op)
   }
 
   /// Parses an identifier.
-  fn identifier(&mut self) -> Result<ast::Identifier> {
+  fn identifier(&mut self) -> Result<ast::Ident> {
     let token = self.consume()?;
 
     if token.kind != TokenKind::Ident {
@@ -312,7 +312,7 @@ impl Parser {
       ));
     }
 
-    Ok(ast::Identifier {
+    Ok(ast::Ident {
       value: token.value.into(),
       span: token.span,
     })
@@ -365,7 +365,7 @@ mod tests {
 
     let expected = ast::Program {
       function: ast::Function {
-        name: ast::Identifier {
+        name: ast::Ident {
           value: "main".to_string().into(),
           span: Span::default(),
         },
@@ -422,14 +422,14 @@ mod tests {
 
     let expected = ast::Program {
       function: ast::Function {
-        name: ast::Identifier {
+        name: ast::Ident {
           value: "main".to_string().into(),
           span: Span::default(),
         },
         body: ast::Statement::Return(ast::Expression::Binary(ast::Binary {
-          operator: ast::BinaryOp::Subtract,
+          op: ast::BinaryOp::Sub,
           left: Box::new(ast::Expression::Binary(ast::Binary {
-            operator: ast::BinaryOp::Multiply,
+            op: ast::BinaryOp::Mul,
             left: Box::new(ast::Expression::Constant(ast::Int {
               value: 1,
               span: Span::default(),
@@ -441,13 +441,13 @@ mod tests {
             span: Span::default(),
           })),
           right: Box::new(ast::Expression::Binary(ast::Binary {
-            operator: ast::BinaryOp::Multiply,
+            op: ast::BinaryOp::Mul,
             left: Box::new(ast::Expression::Constant(ast::Int {
               value: 3,
               span: Span::default(),
             })),
             right: Box::new(ast::Expression::Binary(ast::Binary {
-              operator: ast::BinaryOp::Add,
+              op: ast::BinaryOp::Add,
               left: Box::new(ast::Expression::Constant(ast::Int {
                 value: 4,
                 span: Span::default(),

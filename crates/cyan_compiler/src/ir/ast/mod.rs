@@ -69,7 +69,7 @@ spanned! {
 spanned! {
   #[derive(Debug, PartialEq, Eq)]
   pub struct Function {
-    pub name: Identifier,
+    pub name: Ident,
     pub body: Statement,
   }
 }
@@ -93,21 +93,21 @@ spanned! {
 spanned! {
   #[derive(Clone, Debug, PartialEq, Eq)]
   pub struct Unary {
-    pub operator: UnaryOp,
+    pub op: UnaryOp,
     pub expression: Box<Expression>,
   }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnaryOp {
-  BitwiseNot,
+  BitNot,
   Negate,
 }
 
 spanned! {
   #[derive(Clone, Debug, PartialEq, Eq)]
   pub struct Binary {
-    pub operator: BinaryOp,
+    pub op: BinaryOp,
     pub left: Box<Expression>,
     pub right: Box<Expression>,
   }
@@ -116,9 +116,9 @@ spanned! {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BinaryOp {
   Add,
-  Subtract,
-  Multiply,
-  Divide,
+  Sub,
+  Mul,
+  Div,
   Mod,
 }
 
@@ -131,7 +131,7 @@ spanned! {
 
 spanned! {
   #[derive(Clone, Debug, PartialEq, Eq)]
-  pub struct Identifier {
+  pub struct Ident {
     pub value: Intern<String>,
   }
 }
