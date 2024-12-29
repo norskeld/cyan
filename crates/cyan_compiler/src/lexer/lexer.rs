@@ -140,6 +140,10 @@ impl Lexer<'_> {
       | ZERO..=NINE => self.constant(),
       | TILDE => self.bitwise_not(),
       | HYPHEN => self.negate_or_decrement(),
+      | PLUS => self.plus(),
+      | SLASH => self.slash(),
+      | STAR => self.star(),
+      | PERCENT => self.percent(),
       | SEMICOLON => self.semicolon(),
       | BRACE_OPEN => self.brace_open(),
       | BRACE_CLOSE => self.brace_close(),
@@ -218,6 +222,26 @@ impl Lexer<'_> {
   /// Returns a token for a bitwise not.
   fn bitwise_not(&mut self) -> Token {
     self.token_single(TokenKind::BitwiseNot)
+  }
+
+  /// Returns a token for a divide operator.
+  fn slash(&mut self) -> Token {
+    self.token_single(TokenKind::Divide)
+  }
+
+  /// Returns a token for a multiply operator.
+  fn star(&mut self) -> Token {
+    self.token_single(TokenKind::Multiply)
+  }
+
+  /// Returns a token for a percent operator.
+  fn percent(&mut self) -> Token {
+    self.token_single(TokenKind::Percent)
+  }
+
+  /// Returns a token for an add operator.
+  fn plus(&mut self) -> Token {
+    self.token_single(TokenKind::Plus)
   }
 
   /// Returns a token for a negate or decrement operator.
@@ -465,18 +489,28 @@ mod tests {
   }
 
   #[test]
-  fn lex_bitwise_not() {
+  fn lex_unary_operators() {
     assert_token!("~", BitwiseNot, "~", 1..1, 1..2);
-  }
-
-  #[test]
-  fn lex_decrement() {
     assert_token!("--", Decrement, "--", 1..1, 1..3);
   }
 
   #[test]
-  fn lex_negate() {
+  fn lex_binary_operators() {
+    assert_token!("+", Plus, "+", 1..1, 1..2);
     assert_token!("-", Negate, "-", 1..1, 1..2);
+    assert_token!("*", Multiply, "*", 1..1, 1..2);
+    assert_token!("/", Divide, "/", 1..1, 1..2);
+    assert_token!("%", Percent, "%", 1..1, 1..2);
+  }
+
+  #[test]
+  fn lex_binary_operators_sequence() {
+    assert_tokens!(
+      "++a",
+      token(Plus, "+", 1..1, 1..2),
+      token(Plus, "+", 1..1, 2..3),
+      token(Identifier, "a", 1..1, 3..4)
+    );
   }
 
   #[test]
