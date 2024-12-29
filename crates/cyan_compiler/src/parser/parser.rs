@@ -186,7 +186,7 @@ impl Parser {
     let mut next = self.peek();
 
     while next.is_binary_operator() {
-      match Self::precedence(&next) {
+      match Self::precedence(next) {
         | Some(precedence) if precedence >= min_precedence => {
           let operator = self.binary()?;
           let right = self.expression(precedence + 1)?;

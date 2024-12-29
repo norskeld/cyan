@@ -20,9 +20,22 @@ pub struct Function {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Instruction {
-  Mov { src: Operand, dst: Operand },
-  Unary { operator: UnaryOp, operand: Operand },
+  Mov {
+    src: Operand,
+    dst: Operand,
+  },
+  Unary {
+    operator: UnaryOp,
+    operand: Operand,
+  },
+  Binary {
+    operator: BinaryOp,
+    src: Operand,
+    dst: Operand,
+  },
+  Idiv(Operand),
   AllocateStack(isize),
+  Cdq,
   Ret,
 }
 
@@ -30,6 +43,13 @@ pub enum Instruction {
 pub enum UnaryOp {
   Neg,
   Not,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BinaryOp {
+  Add,
+  Sub,
+  Mult,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -54,5 +74,7 @@ impl fmt::Debug for Operand {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reg {
   AX,
+  DX,
   R10,
+  R11,
 }

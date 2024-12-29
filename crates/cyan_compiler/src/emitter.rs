@@ -113,6 +113,30 @@ impl Emitter {
       | Instruction::AllocateStack(size) => {
         self.output.writeln(format!("\tsubq ${size}, %rsp"));
       },
+      | Instruction::Binary { operator, src, dst } => {
+        let operator = self.emit_binary_operator(operator);
+        let src = self.emit_operand(src);
+        let dst = self.emit_operand(dst);
+
+        self.output.writeln(format!("\t{operator} {src}, {dst}"));
+      },
+      | Instruction::Idiv(operand) => {
+        let operand = self.emit_operand(operand);
+
+        self.output.writeln(format!("\tidivl {operand}"));
+      },
+      | Instruction::Cdq => {
+        self.output.writeln("\tcdq");
+      },
+    }
+  }
+
+  fn emit_operand(&mut self, operand: &Operand) -> String {
+    match operand {
+      | Operand::Imm(int) => format!("${int}"),
+      | Operand::Reg(reg) => self.emit_register(reg),
+      | Operand::Stack(offset) => format!("{offset}(%rbp)"),
+      | Operand::Pseudo(..) => unreachable!("unexpected pseudoregister"),
     }
   }
 
@@ -123,13 +147,20 @@ impl Emitter {
     }
   }
 
-  fn emit_operand(&mut self, operand: &Operand) -> String {
-    match operand {
-      | Operand::Imm(int) => format!("${int}"),
-      | Operand::Reg(Reg::AX) => "%eax".to_string(),
-      | Operand::Reg(Reg::R10) => "%r10d".to_string(),
-      | Operand::Stack(offset) => format!("{offset}(%rbp)"),
-      | Operand::Pseudo(..) => unreachable!("unexpected pseudoregister"),
+  fn emit_binary_operator(&self, operator: &BinaryOp) -> String {
+    match operator {
+      | BinaryOp::Add => "addl".to_string(),
+      | BinaryOp::Sub => "subl".to_string(),
+      | BinaryOp::Mult => "imull".to_string(),
+    }
+  }
+
+  fn emit_register(&self, register: &Reg) -> String {
+    match register {
+      | Reg::AX => "%eax".to_string(),
+      | Reg::DX => "%edx".to_string(),
+      | Reg::R10 => "%r10d".to_string(),
+      | Reg::R11 => "%r11d".to_string(),
     }
   }
 }

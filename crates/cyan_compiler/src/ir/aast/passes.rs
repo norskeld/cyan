@@ -61,7 +61,7 @@ impl LoweringPass {
           instructions.push(Instruction::Ret);
         },
         | tac::Instruction::Unary { operator, src, dst } => {
-          let operator = self.lower_operator(operator);
+          let operator = self.lower_unary_operator(operator);
           let src = self.lower_value(src);
           let dst = self.lower_value(dst);
 
@@ -71,7 +71,72 @@ impl LoweringPass {
             operand: dst,
           });
         },
-        | tac::Instruction::Binary { .. } => unimplemented!("binary instructions"),
+        | tac::Instruction::Binary {
+          operator: tac::BinaryOp::Divide,
+          left,
+          right,
+          dst,
+        } => {
+          let left = self.lower_value(left);
+          let right = self.lower_value(right);
+          let dst = self.lower_value(dst);
+
+          instructions.extend(vec![
+            Instruction::Mov {
+              src: left,
+              dst: Operand::Reg(Reg::AX),
+            },
+            Instruction::Cdq,
+            Instruction::Idiv(right),
+            Instruction::Mov {
+              src: Operand::Reg(Reg::AX),
+              dst,
+            },
+          ]);
+        },
+        | tac::Instruction::Binary {
+          operator: tac::BinaryOp::Mod,
+          left,
+          right,
+          dst,
+        } => {
+          let left = self.lower_value(left);
+          let right = self.lower_value(right);
+          let dst = self.lower_value(dst);
+
+          instructions.extend(vec![
+            Instruction::Mov {
+              src: left,
+              dst: Operand::Reg(Reg::AX),
+            },
+            Instruction::Cdq,
+            Instruction::Idiv(right),
+            Instruction::Mov {
+              src: Operand::Reg(Reg::DX),
+              dst,
+            },
+          ]);
+        },
+        | tac::Instruction::Binary {
+          operator,
+          left,
+          right,
+          dst,
+        } => {
+          let operator = self.lower_binary_operator(operator)?;
+          let left = self.lower_value(left);
+          let right = self.lower_value(right);
+          let dst = self.lower_value(dst);
+
+          instructions.extend(vec![
+            Instruction::Mov { src: left, dst },
+            Instruction::Binary {
+              operator,
+              src: right,
+              dst,
+            },
+          ]);
+        },
       }
     }
 
@@ -85,10 +150,23 @@ impl LoweringPass {
     }
   }
 
-  fn lower_operator(&self, operator: &tac::UnaryOp) -> UnaryOp {
+  fn lower_unary_operator(&self, operator: &tac::UnaryOp) -> UnaryOp {
     match operator {
       | tac::UnaryOp::BitwiseNot => UnaryOp::Not,
       | tac::UnaryOp::Negate => UnaryOp::Neg,
+    }
+  }
+
+  fn lower_binary_operator(&self, operator: &tac::BinaryOp) -> Result<BinaryOp, LoweringError> {
+    match operator {
+      | tac::BinaryOp::Add => Ok(BinaryOp::Add),
+      | tac::BinaryOp::Subtract => Ok(BinaryOp::Sub),
+      | tac::BinaryOp::Multiply => Ok(BinaryOp::Mult),
+      | tac::BinaryOp::Divide | tac::BinaryOp::Mod => {
+        Err(LoweringError::new(
+          "division cannot be handled like other binary operators",
+        ))
+      },
     }
   }
 }
@@ -185,6 +263,19 @@ impl PseudoReplacementPass {
 
         Ok(Instruction::Unary { operator, operand })
       },
+      | Instruction::Binary { operator, src, dst } => {
+        let operator = *operator;
+        let src = self.replace_operand(src);
+        let dst = self.replace_operand(dst);
+
+        Ok(Instruction::Binary { operator, src, dst })
+      },
+      | Instruction::Idiv(operand) => {
+        let operand = self.replace_operand(operand);
+
+        Ok(Instruction::Idiv(operand))
+      },
+      | Instruction::Cdq => Ok(Instruction::Cdq),
       | Instruction::Ret => Ok(Instruction::Ret),
       | Instruction::AllocateStack(..) => {
         Err(PseudoReplacementError::new(
@@ -272,25 +363,76 @@ impl InstructionFixupPass {
     &self,
     instruction: &Instruction,
   ) -> Result<Vec<Instruction>, InstructionFixupError> {
-    match instruction {
+    match *instruction {
+      // Mov can't move a value from one memory address to another.
       | Instruction::Mov {
         src: src @ Operand::Stack(..),
         dst: dst @ Operand::Stack(..),
       } => {
         let fixed = vec![
           Instruction::Mov {
-            src: *src,
+            src,
             dst: Operand::Reg(Reg::R10),
           },
           Instruction::Mov {
             src: Operand::Reg(Reg::R10),
-            dst: *dst,
+            dst,
           },
         ];
 
         Ok(fixed)
       },
-      | other => Ok(vec![*other]),
+      // Add/Sub can't use memory addresses for both operands.
+      | Instruction::Binary {
+        operator: operator @ (BinaryOp::Add | BinaryOp::Sub),
+        src: src @ Operand::Stack(..),
+        dst: dst @ Operand::Stack(..),
+      } => {
+        Ok(vec![
+          Instruction::Mov {
+            src,
+            dst: Operand::Reg(Reg::R10),
+          },
+          Instruction::Binary {
+            operator,
+            src: Operand::Reg(Reg::R10),
+            dst,
+          },
+        ])
+      },
+      // Destination of Mult can't be in memory.
+      | Instruction::Binary {
+        operator: BinaryOp::Mult,
+        src,
+        dst: dst @ Operand::Stack(..),
+      } => {
+        Ok(vec![
+          Instruction::Mov {
+            src: dst,
+            dst: Operand::Reg(Reg::R11),
+          },
+          Instruction::Binary {
+            operator: BinaryOp::Mult,
+            src,
+            dst: Operand::Reg(Reg::R11),
+          },
+          Instruction::Mov {
+            src: Operand::Reg(Reg::R11),
+            dst,
+          },
+        ])
+      },
+      // Idiv can't operate on constants.
+      | Instruction::Idiv(operand @ Operand::Imm(..)) => {
+        Ok(vec![
+          Instruction::Mov {
+            src: operand,
+            dst: Operand::Reg(Reg::R10),
+          },
+          Instruction::Idiv(Operand::Reg(Reg::R10)),
+        ])
+      },
+      | other => Ok(vec![other]),
     }
   }
 }
