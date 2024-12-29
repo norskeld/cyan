@@ -67,6 +67,7 @@ function =
 instruction =
   | Return(value)
   | Unary(unary_op, value src, value dst)
+  | Binary(binary_op, value left, value right, value dst)
 
 value =
   | Constant(int)
@@ -75,6 +76,13 @@ value =
 unary_op =
   | BitwiseNot
   | Negate
+
+binary_op =
+  | Add
+  | Subtract
+  | Multiply
+  | Divide
+  | Mod
 ```
 
 ### Assembly AST (AAST)

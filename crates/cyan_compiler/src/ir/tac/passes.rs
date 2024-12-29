@@ -82,6 +82,7 @@ impl LoweringPass {
     expression: &ast::Expression,
     instructions: &mut Vec<Instruction>,
   ) -> Value {
+    // `Value`s are Copy, so we don't need to `clone` them, they'll be copied.
     match expression {
       | ast::Expression::Constant(int) => Value::Constant(int.value),
       | ast::Expression::Unary(unary) => {
@@ -89,12 +90,25 @@ impl LoweringPass {
         let src = self.emit_tac(&unary.expression, instructions);
         let dst = Value::Var(self.make_temporary().into());
 
-        // `dst` contains interned value, so we don't need to `clone` it, it'll be copied.
         instructions.push(Instruction::Unary { operator, src, dst });
 
         dst
       },
-      | _ => unimplemented!("binary expressions"),
+      | ast::Expression::Binary(binary) => {
+        let operator = self.make_binary_op(&binary.operator);
+        let left = self.emit_tac(&binary.left, instructions);
+        let right = self.emit_tac(&binary.right, instructions);
+        let dst = Value::Var(self.make_temporary().into());
+
+        instructions.push(Instruction::Binary {
+          operator,
+          left,
+          right,
+          dst,
+        });
+
+        dst
+      },
     }
   }
 
@@ -109,6 +123,16 @@ impl LoweringPass {
     match operator {
       | ast::UnaryOp::BitwiseNot => UnaryOp::BitwiseNot,
       | ast::UnaryOp::Negate => UnaryOp::Negate,
+    }
+  }
+
+  fn make_binary_op(&self, operator: &ast::BinaryOp) -> BinaryOp {
+    match operator {
+      | ast::BinaryOp::Add => BinaryOp::Add,
+      | ast::BinaryOp::Subtract => BinaryOp::Subtract,
+      | ast::BinaryOp::Multiply => BinaryOp::Multiply,
+      | ast::BinaryOp::Divide => BinaryOp::Divide,
+      | ast::BinaryOp::Mod => BinaryOp::Mod,
     }
   }
 }
