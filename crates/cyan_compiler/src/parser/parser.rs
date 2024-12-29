@@ -289,7 +289,7 @@ impl Parser {
       | TokenKind::Negate => ast::BinaryOp::Subtract,
       | TokenKind::Multiply => ast::BinaryOp::Multiply,
       | TokenKind::Divide => ast::BinaryOp::Divide,
-      | TokenKind::Percent => ast::BinaryOp::Remainder,
+      | TokenKind::Percent => ast::BinaryOp::Mod,
       | _ => {
         return Err(ParseError::new(
           format!("expected binary operator, found '{}'", token.value),

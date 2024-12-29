@@ -71,6 +71,7 @@ impl LoweringPass {
             operand: dst,
           });
         },
+        | tac::Instruction::Binary { .. } => unimplemented!("binary instructions"),
       }
     }
 
@@ -109,7 +110,7 @@ impl PseudoReplacementError {
 /// `Stack(-8)`, and so on. We subtract 4 for each new variable, since every temporary variable is a
 /// 4-byte integer.
 ///
-/// We need to maintain a map from identifiers to offsets as we go so we can replace each
+/// We also maintain a map from identifiers to offsets as we go so we can replace each
 /// pseudoregister with the same address on the stack every time it appears. For example, if we
 /// process the instructions:
 ///
@@ -118,10 +119,10 @@ impl PseudoReplacementError {
 /// Unary(Neg, Pseudo("a"))
 /// ```
 ///
-/// We should replace `Pseudo("a")` with the same `Stack` operand in both instructions.
+/// We replace `Pseudo("a")` with the same `Stack` operand in both instructions.
 ///
-/// This compiler pass should also return the stack offset of the final temporary variable, because
-/// that tells us how many bytes to allocate on the stack in the next pass.
+/// This compiler pass also returns the stack offset of the final temporary variable, because
+/// that tells us how many bytes to allocate on the stack in the next pass (instructions fixup).
 pub struct PseudoReplacementPass {
   offset: isize,
   offset_map: HashMap<Intern<String>, isize>,

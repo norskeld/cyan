@@ -30,6 +30,12 @@ pub enum Instruction {
     src: Value,
     dst: Value,
   },
+  Binary {
+    operator: BinaryOp,
+    left: Value,
+    right: Value,
+    dst: Value,
+  },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -51,4 +57,13 @@ impl fmt::Debug for Value {
 pub enum UnaryOp {
   BitwiseNot,
   Negate,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BinaryOp {
+  Add,
+  Subtract,
+  Multiply,
+  Divide,
+  Mod,
 }
