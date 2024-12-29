@@ -138,9 +138,9 @@ impl Lexer<'_> {
   pub fn next(&mut self) -> Token {
     match self.current_byte() {
       | ZERO..=NINE => self.constant(),
-      | TILDE => self.bitwise_not(),
-      | HYPHEN => self.negate_or_decrement(),
-      | PLUS => self.plus(),
+      | TILDE => self.bit_not(),
+      | HYPHEN => self.sub_or_decrement(),
+      | PLUS => self.add_or_increment(),
       | SLASH => self.slash(),
       | STAR => self.star(),
       | PERCENT => self.percent(),
@@ -196,7 +196,7 @@ impl Lexer<'_> {
 
   /// Returns a token for the semicolon.
   fn semicolon(&mut self) -> Token {
-    self.token_single(TokenKind::Semicolon)
+    self.token_single(TokenKind::Semi)
   }
 
   /// Returns a token for the brace open.
@@ -220,32 +220,46 @@ impl Lexer<'_> {
   }
 
   /// Returns a token for a bitwise not.
-  fn bitwise_not(&mut self) -> Token {
-    self.token_single(TokenKind::BitwiseNot)
+  fn bit_not(&mut self) -> Token {
+    self.token_single(TokenKind::BitNot)
   }
 
   /// Returns a token for a divide operator.
   fn slash(&mut self) -> Token {
-    self.token_single(TokenKind::Divide)
+    self.token_single(TokenKind::Div)
   }
 
   /// Returns a token for a multiply operator.
   fn star(&mut self) -> Token {
-    self.token_single(TokenKind::Multiply)
+    self.token_single(TokenKind::Mul)
   }
 
   /// Returns a token for a percent operator.
   fn percent(&mut self) -> Token {
-    self.token_single(TokenKind::Percent)
+    self.token_single(TokenKind::Mod)
   }
 
   /// Returns a token for an add operator.
-  fn plus(&mut self) -> Token {
-    self.token_single(TokenKind::Plus)
+  fn add_or_increment(&mut self) -> Token {
+    let start = self.position;
+    let line = self.line;
+
+    // We look ahead to see if the next character is a plus. If we have two consecutive pluses,
+    // we return token for an increment operator.
+    if self.peek(1) == PLUS {
+      self.position += 2;
+
+      return self.token(TokenKind::Inc, start, line);
+    }
+
+    // Otherwise, we return an add operator.
+    self.position += 1;
+
+    self.token(TokenKind::Add, start, line)
   }
 
-  /// Returns a token for a negate or decrement operator.
-  fn negate_or_decrement(&mut self) -> Token {
+  /// Returns a token for a subtract or decrement operators.
+  fn sub_or_decrement(&mut self) -> Token {
     let start = self.position;
     let line = self.line;
 
@@ -254,13 +268,13 @@ impl Lexer<'_> {
     if self.peek(1) == HYPHEN {
       self.position += 2;
 
-      return self.token(TokenKind::Decrement, start, line);
+      return self.token(TokenKind::Dec, start, line);
     }
 
     // Otherwise, we return a negate operator.
     self.position += 1;
 
-    self.token(TokenKind::Negate, start, line)
+    self.token(TokenKind::Sub, start, line)
   }
 
   /// Returns a token for an underscore.
@@ -283,7 +297,7 @@ impl Lexer<'_> {
       self.position += 1;
     }
 
-    self.token(TokenKind::Constant, start, line)
+    self.token(TokenKind::Int, start, line)
   }
 
   /// Returns a token for an identifier.
@@ -304,22 +318,22 @@ impl Lexer<'_> {
       | 3 => {
         match value {
           | "int" => TokenKind::IntKw,
-          | _ => TokenKind::Identifier,
+          | _ => TokenKind::Ident,
         }
       },
       | 4 => {
         match value {
           | "void" => TokenKind::VoidKw,
-          | _ => TokenKind::Identifier,
+          | _ => TokenKind::Ident,
         }
       },
       | 6 => {
         match value {
           | "return" => TokenKind::ReturnKw,
-          | _ => TokenKind::Identifier,
+          | _ => TokenKind::Ident,
         }
       },
-      | _ => TokenKind::Identifier,
+      | _ => TokenKind::Ident,
     };
 
     self.advance_column(value);
@@ -451,13 +465,13 @@ mod tests {
 
   #[test]
   fn lex_identifier() {
-    assert_token!("foo", Identifier, "foo", 1..1, 1..4);
-    assert_token!("fooBar", Identifier, "fooBar", 1..1, 1..7);
-    assert_token!("foo_bar", Identifier, "foo_bar", 1..1, 1..8);
-    assert_token!("foo_123", Identifier, "foo_123", 1..1, 1..8);
-    assert_token!("_foo", Identifier, "_foo", 1..1, 1..5);
-    assert_token!("_", Identifier, "_", 1..1, 1..2);
-    assert_token!("_0", Identifier, "_0", 1..1, 1..3);
+    assert_token!("foo", Ident, "foo", 1..1, 1..4);
+    assert_token!("fooBar", Ident, "fooBar", 1..1, 1..7);
+    assert_token!("foo_bar", Ident, "foo_bar", 1..1, 1..8);
+    assert_token!("foo_123", Ident, "foo_123", 1..1, 1..8);
+    assert_token!("_foo", Ident, "_foo", 1..1, 1..5);
+    assert_token!("_", Ident, "_", 1..1, 1..2);
+    assert_token!("_0", Ident, "_0", 1..1, 1..3);
   }
 
   #[test]
@@ -466,16 +480,16 @@ mod tests {
     assert_token!("void", VoidKw, "void", 1..1, 1..5);
     assert_token!("return", ReturnKw, "return", 1..1, 1..7);
 
-    assert_token!("int123", Identifier, "int123", 1..1, 1..7);
-    assert_token!("void123", Identifier, "void123", 1..1, 1..8);
-    assert_token!("return123", Identifier, "return123", 1..1, 1..10);
+    assert_token!("int123", Ident, "int123", 1..1, 1..7);
+    assert_token!("void123", Ident, "void123", 1..1, 1..8);
+    assert_token!("return123", Ident, "return123", 1..1, 1..10);
   }
 
   #[test]
   fn lex_constant() {
-    assert_token!("0", Constant, "0", 1..1, 1..2);
-    assert_token!("123", Constant, "123", 1..1, 1..4);
-    assert_token!("123_456", Constant, "123_456", 1..1, 1..8);
+    assert_token!("0", Int, "0", 1..1, 1..2);
+    assert_token!("123", Int, "123", 1..1, 1..4);
+    assert_token!("123_456", Int, "123_456", 1..1, 1..8);
   }
 
   #[test]
@@ -490,26 +504,27 @@ mod tests {
 
   #[test]
   fn lex_unary_operators() {
-    assert_token!("~", BitwiseNot, "~", 1..1, 1..2);
-    assert_token!("--", Decrement, "--", 1..1, 1..3);
+    assert_token!("~", BitNot, "~", 1..1, 1..2);
+    assert_token!("--", Dec, "--", 1..1, 1..3);
+    assert_token!("++", Inc, "++", 1..1, 1..3);
   }
 
   #[test]
   fn lex_binary_operators() {
-    assert_token!("+", Plus, "+", 1..1, 1..2);
-    assert_token!("-", Negate, "-", 1..1, 1..2);
-    assert_token!("*", Multiply, "*", 1..1, 1..2);
-    assert_token!("/", Divide, "/", 1..1, 1..2);
-    assert_token!("%", Percent, "%", 1..1, 1..2);
+    assert_token!("+", Add, "+", 1..1, 1..2);
+    assert_token!("-", Sub, "-", 1..1, 1..2);
+    assert_token!("*", Mul, "*", 1..1, 1..2);
+    assert_token!("/", Div, "/", 1..1, 1..2);
+    assert_token!("%", Mod, "%", 1..1, 1..2);
   }
 
   #[test]
   fn lex_binary_operators_sequence() {
     assert_tokens!(
-      "++a",
-      token(Plus, "+", 1..1, 1..2),
-      token(Plus, "+", 1..1, 2..3),
-      token(Identifier, "a", 1..1, 3..4)
+      "+-a",
+      token(Add, "+", 1..1, 1..2),
+      token(Sub, "-", 1..1, 2..3),
+      token(Ident, "a", 1..1, 3..4)
     );
   }
 
@@ -525,7 +540,7 @@ mod tests {
       input.trim_end(),
       token(IntKw, "int", 1..1, 1..4),
       token(Whitespace, " ", 1..1, 4..5),
-      token(Identifier, "main", 1..1, 5..9),
+      token(Ident, "main", 1..1, 5..9),
       token(ParenOpen, "(", 1..1, 9..10),
       token(VoidKw, "void", 1..1, 10..14),
       token(ParenClose, ")", 1..1, 14..15),
@@ -535,8 +550,8 @@ mod tests {
       token(Whitespace, "  ", 2..2, 1..3),
       token(ReturnKw, "return", 2..2, 3..9),
       token(Whitespace, " ", 2..2, 9..10),
-      token(Constant, "42", 2..2, 10..12),
-      token(Semicolon, ";", 2..2, 12..13),
+      token(Int, "42", 2..2, 10..12),
+      token(Semi, ";", 2..2, 12..13),
       token(Newline, "\n", 2..2, 13..14),
       token(BraceClose, "}", 3..3, 1..2)
     );

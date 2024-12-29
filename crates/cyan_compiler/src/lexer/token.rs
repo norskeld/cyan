@@ -10,24 +10,25 @@ pub enum TokenKind {
   VoidKw,
 
   // Operators.
-  BitwiseNot,
-  Decrement,
-  Divide,
-  Multiply,
-  Negate,
-  Percent,
-  Plus,
+  Add,
+  BitNot,
+  Dec,
+  Div,
+  Inc,
+  Mod,
+  Mul,
+  Sub,
 
   // Punctuation.
   BraceClose,
   BraceOpen,
   ParenClose,
   ParenOpen,
-  Semicolon,
+  Semi,
 
   // Non-terminals.
-  Constant,
-  Identifier,
+  Int,
+  Ident,
   Newline,
   Whitespace,
 
@@ -45,30 +46,31 @@ impl TokenKind {
       | TokenKind::VoidKw => "the 'void' keyword",
 
       // Operators.
-      | TokenKind::BitwiseNot => "a bitwise not operator",
-      | TokenKind::Decrement => "a decrement operator",
-      | TokenKind::Divide => "a divide operator",
-      | TokenKind::Multiply => "a multiply operator",
-      | TokenKind::Negate => "a negate operator",
-      | TokenKind::Percent => "a percent operator",
-      | TokenKind::Plus => "a plus operator",
+      | TokenKind::Add => "a '+'",
+      | TokenKind::BitNot => "a '~'",
+      | TokenKind::Dec => "a '--'",
+      | TokenKind::Div => "a '/'",
+      | TokenKind::Inc => "a '++'",
+      | TokenKind::Mod => "a '%'",
+      | TokenKind::Mul => "a '*'",
+      | TokenKind::Sub => "a '-'",
 
       // Punctuation.
       | TokenKind::BraceClose => "a '}'",
       | TokenKind::BraceOpen => "a '{'",
       | TokenKind::ParenClose => "a ')'",
       | TokenKind::ParenOpen => "a '('",
-      | TokenKind::Semicolon => "a ';'",
+      | TokenKind::Semi => "a ';'",
 
       // Non-terminals.
-      | TokenKind::Constant => "a constant",
-      | TokenKind::Identifier => "an identifier",
+      | TokenKind::Int => "an integer",
+      | TokenKind::Ident => "an identifier",
       | TokenKind::Newline => "a newline",
       | TokenKind::Whitespace => "whitespace",
 
       // Other.
       | TokenKind::Eof => "the end of input",
-      | TokenKind::Invalid => "an invalisd token",
+      | TokenKind::Invalid => "an invalid token",
     }
   }
 }
@@ -113,11 +115,7 @@ impl Token {
   pub fn is_binary_operator(&self) -> bool {
     matches!(
       self.kind,
-      TokenKind::Plus
-        | TokenKind::Negate
-        | TokenKind::Multiply
-        | TokenKind::Divide
-        | TokenKind::Percent
+      TokenKind::Add | TokenKind::Sub | TokenKind::Mul | TokenKind::Div | TokenKind::Mod
     )
   }
 }
@@ -132,7 +130,7 @@ impl fmt::Display for Token {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "Token({:?}", self.kind)?;
 
-    if matches!(self.kind, TokenKind::Constant | TokenKind::Identifier) {
+    if matches!(self.kind, TokenKind::Int | TokenKind::Ident) {
       write!(f, ", \"{}\"", self.value)?;
     }
 
