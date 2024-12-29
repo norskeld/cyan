@@ -57,61 +57,16 @@ impl LoweringPass {
           let src = self.lower_value(value);
           let dst = Operand::Reg(Reg::AX);
 
-          instructions.push(Instruction::Mov { src, dst });
-          instructions.push(Instruction::Ret);
+          instructions.extend(vec![Instruction::Mov { src, dst }, Instruction::Ret]);
         },
         | tac::Instruction::Unary { op, src, dst } => {
           let op = self.lower_unary_op(op);
           let src = self.lower_value(src);
           let dst = self.lower_value(dst);
 
-          instructions.push(Instruction::Mov { src, dst });
-          instructions.push(Instruction::Unary { op, operand: dst });
-        },
-        | tac::Instruction::Binary {
-          op: tac::BinaryOp::Div,
-          left,
-          right,
-          dst,
-        } => {
-          let left = self.lower_value(left);
-          let right = self.lower_value(right);
-          let dst = self.lower_value(dst);
-
           instructions.extend(vec![
-            Instruction::Mov {
-              src: left,
-              dst: Operand::Reg(Reg::AX),
-            },
-            Instruction::Cdq,
-            Instruction::Idiv(right),
-            Instruction::Mov {
-              src: Operand::Reg(Reg::AX),
-              dst,
-            },
-          ]);
-        },
-        | tac::Instruction::Binary {
-          op: tac::BinaryOp::Mod,
-          left,
-          right,
-          dst,
-        } => {
-          let left = self.lower_value(left);
-          let right = self.lower_value(right);
-          let dst = self.lower_value(dst);
-
-          instructions.extend(vec![
-            Instruction::Mov {
-              src: left,
-              dst: Operand::Reg(Reg::AX),
-            },
-            Instruction::Cdq,
-            Instruction::Idiv(right),
-            Instruction::Mov {
-              src: Operand::Reg(Reg::DX),
-              dst,
-            },
+            Instruction::Mov { src, dst },
+            Instruction::Unary { op, operand: dst },
           ]);
         },
         | tac::Instruction::Binary {
@@ -120,19 +75,72 @@ impl LoweringPass {
           right,
           dst,
         } => {
-          let op = self.lower_binary_op(op)?;
           let left = self.lower_value(left);
           let right = self.lower_value(right);
           let dst = self.lower_value(dst);
 
-          instructions.extend(vec![
-            Instruction::Mov { src: left, dst },
-            Instruction::Binary {
-              op,
-              src: right,
-              dst,
+          match op {
+            // Division/Modulo.
+            | tac::BinaryOp::Div | tac::BinaryOp::Mod => {
+              // We need to use DX for the remainder.
+              let reg = if op == &tac::BinaryOp::Div {
+                Operand::Reg(Reg::AX)
+              } else {
+                Operand::Reg(Reg::DX)
+              };
+
+              instructions.extend(vec![
+                Instruction::Mov {
+                  src: left,
+                  dst: Operand::Reg(Reg::AX),
+                },
+                Instruction::Cdq,
+                Instruction::Idiv(right),
+                Instruction::Mov { src: reg, dst },
+              ]);
             },
-          ]);
+            // Bitwise shifts.
+            | tac::BinaryOp::BitShl | tac::BinaryOp::BitShr => {
+              let op = self.lower_binary_op(op)?;
+
+              if let Operand::Imm(..) = right {
+                instructions.extend(vec![
+                  Instruction::Mov { src: left, dst },
+                  Instruction::Binary {
+                    op,
+                    src: right,
+                    dst,
+                  },
+                ]);
+              } else {
+                instructions.extend(vec![
+                  Instruction::Mov { src: left, dst },
+                  Instruction::Mov {
+                    src: right,
+                    dst: Operand::Reg(Reg::CX),
+                  },
+                  Instruction::Binary {
+                    op,
+                    src: Operand::Reg(Reg::CX),
+                    dst,
+                  },
+                ]);
+              }
+            },
+            // Addition/Subtraction/Multiplication/And/Or/Xor.
+            | op => {
+              let op = self.lower_binary_op(op)?;
+
+              instructions.extend(vec![
+                Instruction::Mov { src: left, dst },
+                Instruction::Binary {
+                  op,
+                  src: right,
+                  dst,
+                },
+              ]);
+            },
+          }
         },
       }
     }
@@ -157,8 +165,13 @@ impl LoweringPass {
   fn lower_binary_op(&self, op: &tac::BinaryOp) -> Result<BinaryOp, LoweringError> {
     match op {
       | tac::BinaryOp::Add => Ok(BinaryOp::Add),
-      | tac::BinaryOp::Sub => Ok(BinaryOp::Sub),
+      | tac::BinaryOp::BitAnd => Ok(BinaryOp::And),
+      | tac::BinaryOp::BitOr => Ok(BinaryOp::Or),
+      | tac::BinaryOp::BitShl => Ok(BinaryOp::Sal),
+      | tac::BinaryOp::BitShr => Ok(BinaryOp::Sar),
+      | tac::BinaryOp::BitXor => Ok(BinaryOp::Xor),
       | tac::BinaryOp::Mul => Ok(BinaryOp::Mul),
+      | tac::BinaryOp::Sub => Ok(BinaryOp::Sub),
       | tac::BinaryOp::Div | tac::BinaryOp::Mod => {
         Err(LoweringError::new(
           "division cannot be handled like other binary operators",
@@ -373,9 +386,9 @@ impl InstructionFixupPass {
           Instruction::Mov { src: reg, dst },
         ])
       },
-      // Add/Sub can't use memory addresses for both operands.
+      // Add/Sub/And/Or/Xor can't use memory addresses for both operands.
       | Instruction::Binary {
-        op: op @ (BinaryOp::Add | BinaryOp::Sub),
+        op: op @ (BinaryOp::Add | BinaryOp::Sub | BinaryOp::And | BinaryOp::Or | BinaryOp::Xor),
         src: src @ Operand::Stack(..),
         dst: dst @ Operand::Stack(..),
       } => {

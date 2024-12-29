@@ -11,7 +11,12 @@ pub enum TokenKind {
 
   // Operators.
   Add,
+  BitAnd,
   BitNot,
+  BitOr,
+  BitShl,
+  BitShr,
+  BitXor,
   Dec,
   Div,
   Inc,
@@ -47,7 +52,12 @@ impl TokenKind {
 
       // Operators.
       | TokenKind::Add => "a '+'",
+      | TokenKind::BitAnd => "a '&'",
       | TokenKind::BitNot => "a '~'",
+      | TokenKind::BitOr => "a '|'",
+      | TokenKind::BitShl => "a '<<'",
+      | TokenKind::BitShr => "a '>>'",
+      | TokenKind::BitXor => "a '^'",
       | TokenKind::Dec => "a '--'",
       | TokenKind::Div => "a '/'",
       | TokenKind::Inc => "a '++'",
@@ -115,7 +125,16 @@ impl Token {
   pub fn is_binary_operator(&self) -> bool {
     matches!(
       self.kind,
-      TokenKind::Add | TokenKind::Sub | TokenKind::Mul | TokenKind::Div | TokenKind::Mod
+      TokenKind::Add
+        | TokenKind::Sub
+        | TokenKind::Mul
+        | TokenKind::Div
+        | TokenKind::Mod
+        | TokenKind::BitAnd
+        | TokenKind::BitOr
+        | TokenKind::BitShl
+        | TokenKind::BitShr
+        | TokenKind::BitXor
     )
   }
 }

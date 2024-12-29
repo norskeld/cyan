@@ -139,6 +139,11 @@ impl Lexer<'_> {
     match self.current_byte() {
       | ZERO..=NINE => self.constant(),
       | TILDE => self.bit_not(),
+      | PIPE => self.bit_or(),
+      | CARET => self.bit_xor(),
+      | AMPERSAND => self.bit_and(),
+      | LESS => self.bit_shl(),
+      | GREATER => self.bit_shr(),
       | HYPHEN => self.sub_or_decrement(),
       | PLUS => self.add_or_increment(),
       | SLASH => self.slash(),
@@ -222,6 +227,49 @@ impl Lexer<'_> {
   /// Returns a token for a bitwise not.
   fn bit_not(&mut self) -> Token {
     self.token_single(TokenKind::BitNot)
+  }
+
+  /// Returns a token for a bitwise or.
+  fn bit_or(&mut self) -> Token {
+    self.token_single(TokenKind::BitOr)
+  }
+
+  /// Returns a token for a bitwise xor.
+  fn bit_xor(&mut self) -> Token {
+    self.token_single(TokenKind::BitXor)
+  }
+
+  /// Returns a token for a bitwise and.
+  fn bit_and(&mut self) -> Token {
+    self.token_single(TokenKind::BitAnd)
+  }
+
+  /// Returns a token for a bitwise shift left.
+  fn bit_shl(&mut self) -> Token {
+    let start = self.position;
+    let line = self.line;
+
+    if self.peek(1) == LESS {
+      self.position += 2;
+
+      return self.token(TokenKind::BitShl, start, line);
+    }
+
+    unimplemented!("less than");
+  }
+
+  /// Returns a token for a bitwise shift right.
+  fn bit_shr(&mut self) -> Token {
+    let start = self.position;
+    let line = self.line;
+
+    if self.peek(1) == GREATER {
+      self.position += 2;
+
+      return self.token(TokenKind::BitShr, start, line);
+    }
+
+    unimplemented!("greater than");
   }
 
   /// Returns a token for a divide operator.
@@ -510,12 +558,21 @@ mod tests {
   }
 
   #[test]
-  fn lex_binary_operators() {
+  fn lex_arithmetic_binary_operators() {
     assert_token!("+", Add, "+", 1..1, 1..2);
     assert_token!("-", Sub, "-", 1..1, 1..2);
     assert_token!("*", Mul, "*", 1..1, 1..2);
     assert_token!("/", Div, "/", 1..1, 1..2);
     assert_token!("%", Mod, "%", 1..1, 1..2);
+  }
+
+  #[test]
+  fn lex_bitwise_binary_operators() {
+    assert_token!("|", BitOr, "|", 1..1, 1..2);
+    assert_token!("^", BitXor, "^", 1..1, 1..2);
+    assert_token!("&", BitAnd, "&", 1..1, 1..2);
+    assert_token!("<<", BitShl, "<<", 1..1, 1..3);
+    assert_token!(">>", BitShr, ">>", 1..1, 1..3);
   }
 
   #[test]

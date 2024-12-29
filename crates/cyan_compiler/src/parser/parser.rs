@@ -286,10 +286,15 @@ impl Parser {
 
     let op = match token.kind {
       | TokenKind::Add => ast::BinaryOp::Add,
-      | TokenKind::Sub => ast::BinaryOp::Sub,
-      | TokenKind::Mul => ast::BinaryOp::Mul,
+      | TokenKind::BitAnd => ast::BinaryOp::BitAnd,
+      | TokenKind::BitOr => ast::BinaryOp::BitOr,
+      | TokenKind::BitShl => ast::BinaryOp::BitShl,
+      | TokenKind::BitShr => ast::BinaryOp::BitShr,
+      | TokenKind::BitXor => ast::BinaryOp::BitXor,
       | TokenKind::Div => ast::BinaryOp::Div,
       | TokenKind::Mod => ast::BinaryOp::Mod,
+      | TokenKind::Mul => ast::BinaryOp::Mul,
+      | TokenKind::Sub => ast::BinaryOp::Sub,
       | _ => {
         return Err(ParseError::new(
           format!("expected binary operator, found '{}'", token.value),
@@ -326,6 +331,10 @@ impl Parser {
     match token.kind {
       | TokenKind::Mul | TokenKind::Div | TokenKind::Mod => Some(50),
       | TokenKind::Add | TokenKind::Sub => Some(45),
+      | TokenKind::BitShl | TokenKind::BitShr => Some(40),
+      | TokenKind::BitAnd => Some(25),
+      | TokenKind::BitXor => Some(20),
+      | TokenKind::BitOr => Some(15),
       | _ => None,
     }
   }

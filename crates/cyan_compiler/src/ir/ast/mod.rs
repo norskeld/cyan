@@ -116,10 +116,15 @@ spanned! {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BinaryOp {
   Add,
-  Sub,
-  Mul,
+  BitAnd,
+  BitOr,
+  BitShl,
+  BitShr,
+  BitXor,
   Div,
   Mod,
+  Mul,
+  Sub,
 }
 
 spanned! {

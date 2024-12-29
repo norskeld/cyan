@@ -13,7 +13,7 @@ Compiler for a subset of C.
 <expression> ::= <factor> | <expression> <binary-op> <expression>
 <factor>     ::= <int> | <unary-op> <factor> | "(" <expression> ")"
 <unary-op>   ::= "-" | "~"
-<binary-op>  ::= "+" | "-" | "*" | "/" | "%"
+<binary-op>  ::= "+" | "-" | "*" | "/" | "%" | "<<" | ">>" | "&" | "|" | "^"
 
 <identifier> ::= ? An identifier token ?
 <int>        ::= ? A constant token ?
@@ -28,8 +28,11 @@ Compiler for a subset of C.
 
 This is a syntax tree representation of a C program.
 
+<details>
+<summary>Definition</summary>
+
 ```zephyr
-program = Program(function)
+program = Program(function function)
 
 function =
   | Function(identifier name, statement body)
@@ -39,66 +42,84 @@ statement =
 
 expression =
   | Constant(int)
-  | Unary(unary_op operator, expression expression)
-  | Binary(binary_op, expression left, expression right)
+  | Unary(unary_op op, expression expression)
+  | Binary(binary_op op, expression left, expression right)
 
 unary_op =
-  | BitwiseNot
+  | BitNot
   | Negate
 
 binary_op =
   | Add
-  | Subtract
-  | Multiply
-  | Divide
+  | BitAnd
+  | BitOr
+  | BitShl
+  | BitShr
+  | BitXor
+  | Div
   | Mod
+  | Mul
+  | Sub
 ```
+</details>
 
 ### Three Address Code (TAC)
 
 This IR lets us handle structural transformations — like removing nested expressions — separately from the details of assembly language, and it's also well suited for applying some compile-time optimizations.
 
+<details>
+<summary>Definition</summary>
+
 ```zephyr
-program = Program(function)
+program = Program(function function)
 
 function =
-  | Function(identifier, instruction* instructions)
+  | Function(identifier name, instruction* instructions)
 
 instruction =
-  | Return(value)
-  | Unary(unary_op, value src, value dst)
-  | Binary(binary_op, value left, value right, value dst)
+  | Return(value value)
+  | Unary(unary_op op, value src, value dst)
+  | Binary(binary_op op, value left, value right, value dst)
 
 value =
   | Constant(int)
   | Var(identifier)
 
 unary_op =
-  | BitwiseNot
+  | BitNot
   | Negate
 
 binary_op =
   | Add
-  | Subtract
-  | Multiply
-  | Divide
+  | BitAnd
+  | BitOr
+  | BitShl
+  | BitShr
+  | BitXor
+  | Div
   | Mod
+  | Mul
+  | Sub
 ```
+</details>
 
 ### Assembly AST (AAST)
 
 This IR is used to emit assembly code.
 
+<details>
+<summary>Definition</summary>
+
 ```zephyr
-program = Program(function)
+program = Program(function function)
 
 function =
   | Function(identifier name, instruction* instructions)
 
 instruction =
   | Mov(operand src, operand dst)
-  | Unary(unary_op operator, operand)
-  | Binary(binary_op, operand, operand operand)
+  | Unary(unary_op op, operand operand)
+  | Binary(binary_op op, operand src, operand dst)
   | Idiv(operand)
   | AllocateStack(int)
   | Cdq
@@ -110,8 +131,13 @@ unary_op =
 
 binary_op =
   | Add
-  | Subtract
-  | Multiply
+  | And
+  | Mul
+  | Or
+  | Sal
+  | Sar
+  | Sub
+  | Xor
 
 operand =
   | Imm(int)
@@ -121,10 +147,12 @@ operand =
 
 reg =
   | AX
+  | CX
   | DX
   | R10
   | R11
 ```
+</details>
 
 ## Links
 
