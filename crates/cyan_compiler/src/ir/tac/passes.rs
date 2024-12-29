@@ -94,6 +94,7 @@ impl LoweringPass {
 
         dst
       },
+      | _ => unimplemented!("binary expressions"),
     }
   }
 

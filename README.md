@@ -10,8 +10,10 @@ Compiler for a subset of C.
 <program>    ::= <function>
 <function>   ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
 <statement>  ::= "return" <expression> ";"
-<expression> ::= <int> | <unary-op> <expression> | "(" <expression> ")"
+<expression> ::= <factor> | <expression> <binary-op> <expression>
+<factor>     ::= <int> | <unary-op> <factor> | "(" <expression> ")"
 <unary-op>   ::= "-" | "~"
+<binary-op>  ::= "+" | "-" | "*" | "/" | "%"
 
 <identifier> ::= ? An identifier token ?
 <int>        ::= ? A constant token ?
@@ -38,10 +40,18 @@ statement =
 expression =
   | Constant(int)
   | Unary(unary_op, expression)
+  | Binary(binary_op, expression, expression)
 
 unary_op =
   | BitwiseNot
   | Negate
+
+binary_op =
+  | Add
+  | Subtract
+  | Multiply
+  | Divide
+  | Mod
 ```
 
 ### Three Address Code (TAC)

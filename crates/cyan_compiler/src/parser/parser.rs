@@ -182,6 +182,31 @@ impl Parser {
 
   /// Parses an expression.
   fn expression(&mut self) -> Result<ast::Expression> {
+    let mut left = self.factor()?;
+    let mut next = self.peek();
+
+    while next.is_binary_operator() {
+      let operator = self.binary()?;
+      let right = self.factor()?;
+
+      let left_span = left.span().clone();
+      let right_span = right.span().clone();
+
+      left = ast::Expression::Binary(ast::Binary {
+        operator,
+        left: Box::new(left),
+        right: Box::new(right),
+        span: Span::merge(&left_span, &right_span),
+      });
+
+      next = self.peek();
+    }
+
+    Ok(left)
+  }
+
+  /// Parses a "factor" expression, i.e. and indirection arm to allow for precedence parsing.
+  fn factor(&mut self) -> Result<ast::Expression> {
     let token = self.peek();
 
     match token.kind {
@@ -240,7 +265,7 @@ impl Parser {
       },
     };
 
-    let expression = self.expression()?;
+    let expression = self.factor()?;
     let span = Span::merge(&token.span, expression.span());
 
     Ok(ast::Expression::Unary(ast::Unary {
@@ -248,6 +273,27 @@ impl Parser {
       expression: Box::new(expression),
       span,
     }))
+  }
+
+  /// Parses a binary operator.
+  fn binary(&mut self) -> Result<ast::BinaryOp> {
+    let token = self.consume()?;
+
+    let operator = match token.kind {
+      | TokenKind::Plus => ast::BinaryOp::Add,
+      | TokenKind::Negate => ast::BinaryOp::Subtract,
+      | TokenKind::Multiply => ast::BinaryOp::Multiply,
+      | TokenKind::Divide => ast::BinaryOp::Divide,
+      | TokenKind::Percent => ast::BinaryOp::Remainder,
+      | _ => {
+        return Err(ParseError::new(
+          format!("expected binary operator, found '{}'", token.value),
+          token.span.clone(),
+        ))
+      },
+    };
+
+    Ok(operator)
   }
 
   /// Parses an identifier.
