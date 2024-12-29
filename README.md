@@ -39,8 +39,8 @@ statement =
 
 expression =
   | Constant(int)
-  | Unary(unary_op, expression)
-  | Binary(binary_op, expression, expression)
+  | Unary(unary_op operator, expression expression)
+  | Binary(binary_op, expression left, expression right)
 
 unary_op =
   | BitwiseNot
@@ -97,19 +97,33 @@ function =
 
 instruction =
   | Mov(operand src, operand dst)
-  | Unary(unary_op, operand)
+  | Unary(unary_op operator, operand)
+  | Binary(binary_op, operand, operand operand)
+  | Idiv(operand)
   | AllocateStack(int)
+  | Cdq
   | Ret
 
 unary_op =
   | Neg
   | Not
 
+binary_op =
+  | Add
+  | Subtract
+  | Multiply
+
 operand =
   | Imm(int)
   | Reg(reg)
   | Pseudo(identifier)
   | Stack(int)
+
+reg =
+  | AX
+  | DX
+  | R10
+  | R11
 ```
 
 ## Links
