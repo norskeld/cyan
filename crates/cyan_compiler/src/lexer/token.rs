@@ -6,19 +6,23 @@ use crate::span::Span;
 pub enum TokenKind {
   // Keywords.
   IntKw,
-  VoidKw,
   ReturnKw,
+  VoidKw,
 
   // Operators.
   BitwiseNot,
   Decrement,
+  Divide,
+  Multiply,
   Negate,
+  Percent,
+  Plus,
 
   // Punctuation.
-  ParenOpen,
-  ParenClose,
-  BraceOpen,
   BraceClose,
+  BraceOpen,
+  ParenClose,
+  ParenOpen,
   Semicolon,
 
   // Non-terminals.
@@ -28,8 +32,8 @@ pub enum TokenKind {
   Whitespace,
 
   // Other.
-  Invalid,
   Eof,
+  Invalid,
 }
 
 impl TokenKind {
@@ -37,19 +41,23 @@ impl TokenKind {
     match self {
       // Keywords.
       | TokenKind::IntKw => "the 'int' keyword",
-      | TokenKind::VoidKw => "the 'void' keyword",
       | TokenKind::ReturnKw => "the 'return' keyword",
+      | TokenKind::VoidKw => "the 'void' keyword",
 
       // Operators.
       | TokenKind::BitwiseNot => "a bitwise not operator",
       | TokenKind::Decrement => "a decrement operator",
+      | TokenKind::Divide => "a divide operator",
+      | TokenKind::Multiply => "a multiply operator",
       | TokenKind::Negate => "a negate operator",
+      | TokenKind::Percent => "a percent operator",
+      | TokenKind::Plus => "a plus operator",
 
       // Punctuation.
-      | TokenKind::ParenOpen => "a '('",
-      | TokenKind::ParenClose => "a ')'",
-      | TokenKind::BraceOpen => "a '{'",
       | TokenKind::BraceClose => "a '}'",
+      | TokenKind::BraceOpen => "a '{'",
+      | TokenKind::ParenClose => "a ')'",
+      | TokenKind::ParenOpen => "a '('",
       | TokenKind::Semicolon => "a ';'",
 
       // Non-terminals.
@@ -59,8 +67,8 @@ impl TokenKind {
       | TokenKind::Whitespace => "whitespace",
 
       // Other.
-      | TokenKind::Invalid => "an invalid token",
       | TokenKind::Eof => "the end of input",
+      | TokenKind::Invalid => "an invalisd token",
     }
   }
 }
@@ -98,6 +106,14 @@ impl Token {
     matches!(
       self.kind,
       TokenKind::IntKw | TokenKind::VoidKw | TokenKind::ReturnKw
+    )
+  }
+
+  /// Returns `true` if the token is a binary operator.
+  pub fn is_binary_operator(&self) -> bool {
+    matches!(
+      self.kind,
+      TokenKind::Plus | TokenKind::Negate | TokenKind::Multiply | TokenKind::Divide
     )
   }
 }
