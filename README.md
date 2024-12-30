@@ -28,10 +28,10 @@ Compiler for a subset of C.
 
 This is a syntax tree representation of a C program.
 
-<details>
+<details open>
 <summary>Definition</summary>
 
-```zephyr
+```scala
 program = Program(function function)
 
 function =
@@ -70,7 +70,7 @@ This IR lets us handle structural transformations — like removing nested expre
 <details>
 <summary>Definition</summary>
 
-```zephyr
+```scala
 program = Program(function function)
 
 function =
@@ -110,7 +110,7 @@ This IR is used to emit assembly code.
 <details>
 <summary>Definition</summary>
 
-```zephyr
+```scala
 program = Program(function function)
 
 function =
