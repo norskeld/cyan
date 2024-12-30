@@ -28,7 +28,7 @@ Compiler for a subset of C.
 
 This is a syntax tree representation of a C program.
 
-<details open>
+<details>
 <summary>Definition</summary>
 
 ```scala
