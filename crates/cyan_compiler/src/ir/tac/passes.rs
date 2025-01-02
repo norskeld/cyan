@@ -123,23 +123,36 @@ impl LoweringPass {
 
   fn make_unary_op(&self, op: &ast::UnaryOp) -> UnaryOp {
     match op {
-      | ast::UnaryOp::BitNot => UnaryOp::BitNot,
+      // Arithmetics operators.
       | ast::UnaryOp::Negate => UnaryOp::Negate,
+      // Bitwise operators.
+      | ast::UnaryOp::BitNot => UnaryOp::BitNot,
+      // Logical operators.
+      | ast::UnaryOp::Not => UnaryOp::Not,
     }
   }
 
   fn make_binary_op(&self, op: &ast::BinaryOp) -> BinaryOp {
     match op {
+      // Arithmetics operators.
       | ast::BinaryOp::Add => BinaryOp::Add,
+      | ast::BinaryOp::Div => BinaryOp::Div,
+      | ast::BinaryOp::Mod => BinaryOp::Mod,
+      | ast::BinaryOp::Mul => BinaryOp::Mul,
+      | ast::BinaryOp::Sub => BinaryOp::Sub,
+      // Bitwise operators.
       | ast::BinaryOp::BitAnd => BinaryOp::BitAnd,
       | ast::BinaryOp::BitOr => BinaryOp::BitOr,
       | ast::BinaryOp::BitShl => BinaryOp::BitShl,
       | ast::BinaryOp::BitShr => BinaryOp::BitShr,
       | ast::BinaryOp::BitXor => BinaryOp::BitXor,
-      | ast::BinaryOp::Div => BinaryOp::Div,
-      | ast::BinaryOp::Mod => BinaryOp::Mod,
-      | ast::BinaryOp::Mul => BinaryOp::Mul,
-      | ast::BinaryOp::Sub => BinaryOp::Sub,
+      // Logical operators.
+      | ast::BinaryOp::And => BinaryOp::And,
+      | ast::BinaryOp::Equal => BinaryOp::Equal,
+      | ast::BinaryOp::Greater => BinaryOp::Greater,
+      | ast::BinaryOp::GreaterEqual => BinaryOp::GreaterEqual,
+      | ast::BinaryOp::Less => BinaryOp::Less,
+      | ast::BinaryOp::LessEqual => BinaryOp::LessEqual,
     }
   }
 }

@@ -13,7 +13,10 @@ Compiler for a subset of C.
 <expression> ::= <factor> | <expression> <binary-op> <expression>
 <factor>     ::= <int> | <unary-op> <factor> | "(" <expression> ")"
 <unary-op>   ::= "-" | "~"
-<binary-op>  ::= "+" | "-" | "*" | "/" | "%" | "<<" | ">>" | "&" | "|" | "^"
+
+<binary-op>  ::= "+" | "-" | "*" | "/" | "%"
+               | "<<" | ">>" | "&" | "|" | "^"
+               | "&&" | "||" | "==" | "!=" | "<" | "<=" | ">" | ">="
 
 <identifier> ::= ? An identifier token ?
 <int>        ::= ? A constant token ?
@@ -48,18 +51,27 @@ expression =
 unary_op =
   | BitNot
   | Negate
+  | Not
 
 binary_op =
   | Add
+  | Div
+  | Mod
+  | Mul
+  | Sub
   | BitAnd
   | BitOr
   | BitShl
   | BitShr
   | BitXor
-  | Div
-  | Mod
-  | Mul
-  | Sub
+  | And
+  | Equal
+  | Greater
+  | GreaterEqual
+  | Less
+  | LessEqual
+  | NotEqual
+  | Or
 ```
 </details>
 

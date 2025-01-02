@@ -100,8 +100,12 @@ spanned! {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnaryOp {
-  BitNot,
+  // Arithmetic operators.
   Negate,
+  // Bitwise operators.
+  BitNot,
+  // Logical operators.
+  Not,
 }
 
 spanned! {
@@ -115,16 +119,25 @@ spanned! {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BinaryOp {
+  // Arithmetic operators.
   Add,
+  Div,
+  Mod,
+  Mul,
+  Sub,
+  // Bitwise operators.
   BitAnd,
   BitOr,
   BitShl,
   BitShr,
   BitXor,
-  Div,
-  Mod,
-  Mul,
-  Sub,
+  // Logical operators.
+  And,
+  Equal,
+  Greater,
+  GreaterEqual,
+  Less,
+  LessEqual,
 }
 
 spanned! {
