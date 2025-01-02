@@ -153,6 +153,8 @@ impl LoweringPass {
       | ast::BinaryOp::GreaterEqual => BinaryOp::GreaterEqual,
       | ast::BinaryOp::Less => BinaryOp::Less,
       | ast::BinaryOp::LessEqual => BinaryOp::LessEqual,
+      | ast::BinaryOp::NotEqual => BinaryOp::NotEqual,
+      | ast::BinaryOp::Or => BinaryOp::Or,
     }
   }
 }

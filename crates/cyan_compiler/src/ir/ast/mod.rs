@@ -138,6 +138,8 @@ pub enum BinaryOp {
   GreaterEqual,
   Less,
   LessEqual,
+  NotEqual,
+  Or,
 }
 
 spanned! {
