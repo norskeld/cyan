@@ -33,6 +33,20 @@ pub enum Instruction {
     src: Operand,
     dst: Operand,
   },
+  Cmp {
+    left: Operand,
+    right: Operand,
+  },
+  Jmp(Intern<String>),
+  JmpCC {
+    cond: CondCode,
+    target: Intern<String>,
+  },
+  SetCC {
+    code: CondCode,
+    dst: Operand,
+  },
+  Label(Intern<String>),
   Idiv(Operand),
   AllocateStack(isize),
   Cdq,
@@ -74,6 +88,16 @@ impl fmt::Debug for Operand {
       | Operand::Pseudo(identifier) => write!(f, "Pseudo({identifier})"),
     }
   }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CondCode {
+  E,
+  NE,
+  G,
+  GE,
+  L,
+  LE,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -141,7 +141,7 @@ pub enum BinaryOp {
   BitShl,
   BitShr,
   BitXor,
-  // Logical operators.
+  // Logical and relational operators.
   And,
   Equal,
   Greater,

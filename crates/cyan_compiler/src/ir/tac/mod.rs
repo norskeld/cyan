@@ -86,13 +86,11 @@ pub enum BinaryOp {
   BitShl,
   BitShr,
   BitXor,
-  // Logical operators.
-  And,
+  // Relational operators.
   Equal,
   Greater,
   GreaterEqual,
   Less,
   LessEqual,
   NotEqual,
-  Or,
 }
