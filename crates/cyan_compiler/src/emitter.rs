@@ -128,6 +128,7 @@ impl Emitter {
       | Instruction::Cdq => {
         self.output.writeln("\tcdq");
       },
+      | other => unimplemented!("emitting of instruction '{other:?}' is not implemented"),
     }
   }
 

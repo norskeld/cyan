@@ -59,8 +59,31 @@ impl LoweringPass {
 
           instructions.extend(vec![Instruction::Mov { src, dst }, Instruction::Ret]);
         },
+        | tac::Instruction::Unary {
+          op: tac::UnaryOp::Not,
+          src,
+          dst,
+        } => {
+          let src = self.lower_value(src);
+          let dst = self.lower_value(dst);
+
+          instructions.extend(vec![
+            Instruction::Cmp {
+              left: Operand::Imm(0),
+              right: src,
+            },
+            Instruction::Mov {
+              src: Operand::Imm(0),
+              dst,
+            },
+            Instruction::SetCC {
+              code: CondCode::E,
+              dst,
+            },
+          ]);
+        },
         | tac::Instruction::Unary { op, src, dst } => {
-          let op = self.lower_unary_op(op);
+          let op = self.lower_unary_op(op)?;
           let src = self.lower_value(src);
           let dst = self.lower_value(dst);
 
@@ -80,6 +103,24 @@ impl LoweringPass {
           let dst = self.lower_value(dst);
 
           match op {
+            // Relational.
+            | tac::BinaryOp::Equal
+            | tac::BinaryOp::NotEqual
+            | tac::BinaryOp::Greater
+            | tac::BinaryOp::GreaterEqual
+            | tac::BinaryOp::Less
+            | tac::BinaryOp::LessEqual => {
+              let code = self.lower_cond_code(op)?;
+
+              instructions.extend(vec![
+                Instruction::Cmp { left, right },
+                Instruction::Mov {
+                  src: Operand::Imm(0),
+                  dst,
+                },
+                Instruction::SetCC { code, dst },
+              ]);
+            },
             // Division/Modulo.
             | tac::BinaryOp::Div | tac::BinaryOp::Mod => {
               // We need to use DX for the remainder.
@@ -127,7 +168,7 @@ impl LoweringPass {
                 ]);
               }
             },
-            // Addition/Subtraction/Multiplication/And/Or/Xor.
+            // Addition/Subtraction/Multiplication/BitAnd/BitOr/BitXor.
             | op => {
               let op = self.lower_binary_op(op)?;
 
@@ -142,7 +183,46 @@ impl LoweringPass {
             },
           }
         },
-        | _ => unimplemented!("lowering of instruction '{instruction:?}' is not implemented"),
+        | tac::Instruction::Copy { src, dst } => {
+          let src = self.lower_value(src);
+          let dst = self.lower_value(dst);
+
+          instructions.push(Instruction::Mov { src, dst });
+        },
+        | tac::Instruction::Jump(identifier) => {
+          instructions.push(Instruction::Jmp(*identifier));
+        },
+        | tac::Instruction::JumpIfZero { condition, target } => {
+          let right = self.lower_value(condition);
+
+          instructions.extend(vec![
+            Instruction::Cmp {
+              left: Operand::Imm(0),
+              right,
+            },
+            Instruction::JmpCC {
+              cond: CondCode::E,
+              target: *target,
+            },
+          ])
+        },
+        | tac::Instruction::JumpIfNotZero { condition, target } => {
+          let right = self.lower_value(condition);
+
+          instructions.extend(vec![
+            Instruction::Cmp {
+              left: Operand::Imm(0),
+              right,
+            },
+            Instruction::JmpCC {
+              cond: CondCode::NE,
+              target: *target,
+            },
+          ])
+        },
+        | tac::Instruction::Label(identifier) => {
+          instructions.push(Instruction::Label(*identifier));
+        },
       }
     }
 
@@ -156,11 +236,15 @@ impl LoweringPass {
     }
   }
 
-  fn lower_unary_op(&self, op: &tac::UnaryOp) -> UnaryOp {
+  fn lower_unary_op(&self, op: &tac::UnaryOp) -> Result<UnaryOp, LoweringError> {
     match op {
-      | tac::UnaryOp::BitNot => UnaryOp::Not,
-      | tac::UnaryOp::Negate => UnaryOp::Neg,
-      | op => unimplemented!("lowering of unary operator '{op:?}' is not implemented"),
+      | tac::UnaryOp::BitNot => Ok(UnaryOp::Not),
+      | tac::UnaryOp::Negate => Ok(UnaryOp::Neg),
+      | tac::UnaryOp::Not => {
+        Err(LoweringError::new(
+          "can't lower TAC logical not directly to AAST",
+        ))
+      },
     }
   }
 
@@ -174,12 +258,26 @@ impl LoweringPass {
       | tac::BinaryOp::BitXor => Ok(BinaryOp::Xor),
       | tac::BinaryOp::Mul => Ok(BinaryOp::Mul),
       | tac::BinaryOp::Sub => Ok(BinaryOp::Sub),
-      | tac::BinaryOp::Div | tac::BinaryOp::Mod => {
-        Err(LoweringError::new(
-          "division cannot be handled like other binary operators",
-        ))
-      },
-      | op => unimplemented!("lowering of binary operator '{op:?}' is not implemented"),
+      | tac::BinaryOp::Div
+      | tac::BinaryOp::Mod
+      | tac::BinaryOp::Equal
+      | tac::BinaryOp::NotEqual
+      | tac::BinaryOp::Greater
+      | tac::BinaryOp::GreaterEqual
+      | tac::BinaryOp::Less
+      | tac::BinaryOp::LessEqual => Err(LoweringError::new("not a binary assembly instruction")),
+    }
+  }
+
+  fn lower_cond_code(&self, op: &tac::BinaryOp) -> Result<CondCode, LoweringError> {
+    match op {
+      | tac::BinaryOp::Equal => Ok(CondCode::E),
+      | tac::BinaryOp::NotEqual => Ok(CondCode::NE),
+      | tac::BinaryOp::Greater => Ok(CondCode::G),
+      | tac::BinaryOp::GreaterEqual => Ok(CondCode::GE),
+      | tac::BinaryOp::Less => Ok(CondCode::L),
+      | tac::BinaryOp::LessEqual => Ok(CondCode::LE),
+      | _ => Err(LoweringError::new("not a condition code")),
     }
   }
 }
@@ -294,6 +392,9 @@ impl PseudoReplacementPass {
         Err(PseudoReplacementError::new(
           "unexpected AllocateStack instruction",
         ))
+      },
+      | other => {
+        unimplemented!("pseudo replacement pass for instruction '{other:?}' is not implemented")
       },
     }
   }

@@ -144,7 +144,12 @@ instruction =
   | Mov(operand src, operand dst)
   | Unary(unary_op op, operand operand)
   | Binary(binary_op op, operand src, operand dst)
+  | Cmp(operand left, operand right)
   | Idiv(operand)
+  | Jmp(identifier)
+  | JmpCC(cond_code code, identifier target)
+  | SetCC(cond_code code, operand dst)
+  | Label(identifier)
   | AllocateStack(int)
   | Cdq
   | Ret
@@ -168,6 +173,14 @@ operand =
   | Reg(reg)
   | Pseudo(identifier)
   | Stack(int)
+
+cond_code =
+  | E
+  | NE
+  | G
+  | GE
+  | L
+  | LE
 
 reg =
   | AX
