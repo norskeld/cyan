@@ -6,7 +6,7 @@ use crate::span::{Span, Spanned};
 
 type Result<T> = std::result::Result<T, ParseError>;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 #[error("parse error [{span}]: {message}")]
 pub struct ParseError {
   /// The error message.
@@ -146,9 +146,7 @@ impl Parser {
     self.expect(TokenKind::BraceOpen)?;
 
     let body = self.statement()?;
-
     let close = self.expect(TokenKind::BraceClose)?;
-
     let span = Span::merge(&start.span, &close.span);
 
     Ok(ast::Function { name, body, span })
@@ -365,38 +363,32 @@ mod tests {
   use crate::lexer::Token;
   use crate::span::Span;
 
-  macro_rules! main {
-    ($($token: expr),+ $(,)?) => {
-      vec![
-        token(TokenKind::IntKw, "int"),
-        token(TokenKind::Ident, "main"),
-        token(TokenKind::ParenOpen, "("),
-        token(TokenKind::VoidKw, "void"),
-        token(TokenKind::ParenClose, ")"),
-        token(TokenKind::BraceOpen, "{"),
-        $($token),+,
-        token(TokenKind::BraceClose, "}"),
-      ]
-    };
-  }
-
   fn token(kind: TokenKind, value: &str) -> Token {
     Token::new(kind, value.to_string(), Span::default())
   }
 
+  /// Tries to parse the whole program from the given tokens.
   fn parse(tokens: Vec<Token>) -> Result<ast::Program> {
     let mut parser = Parser::new(tokens);
     parser.parse()
   }
 
   #[test]
-  fn parse_function_definition_parsing() {
-    let actual = parse(main! {
+  fn parse_program() {
+    let mut parser = Parser::new(vec![
+      token(TokenKind::IntKw, "int"),
+      token(TokenKind::Ident, "main"),
+      token(TokenKind::ParenOpen, "("),
+      token(TokenKind::VoidKw, "void"),
+      token(TokenKind::ParenClose, ")"),
+      token(TokenKind::BraceOpen, "{"),
       token(TokenKind::ReturnKw, "return"),
-      token(TokenKind::Int, "5"),
+      token(TokenKind::Int, "42"),
       token(TokenKind::Semi, ";"),
-    })
-    .expect("should parse function definition");
+      token(TokenKind::BraceClose, "}"),
+    ]);
+
+    let actual = parser.parse();
 
     let expected = ast::Program {
       function: ast::Function {
@@ -405,7 +397,7 @@ mod tests {
           span: Span::default(),
         },
         body: ast::Statement::Return(ast::Expression::Constant(ast::Int {
-          value: 5,
+          value: 42,
           span: Span::default(),
         })),
         span: Span::default(),
@@ -413,7 +405,117 @@ mod tests {
       span: Span::default(),
     };
 
-    assert_eq!(actual, expected);
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_statement() {
+    let mut parser = Parser::new(vec![
+      token(TokenKind::ReturnKw, "return"),
+      token(TokenKind::Int, "42"),
+      token(TokenKind::Semi, ";"),
+    ]);
+
+    let actual = parser.statement();
+
+    let expected = ast::Statement::Return(ast::Expression::Constant(ast::Int {
+      value: 42,
+      span: Span::default(),
+    }));
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_constant() {
+    let mut parser = Parser::new(vec![token(TokenKind::Int, "42")]);
+
+    let actual = parser.constant();
+
+    let expected = ast::Expression::Constant(ast::Int {
+      value: 42,
+      span: Span::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_unary() {
+    let mut parser = Parser::new(vec![
+      token(TokenKind::Sub, "-"),
+      token(TokenKind::Int, "42"),
+    ]);
+
+    let actual = parser.unary();
+
+    let expected = ast::Expression::Unary(ast::Unary {
+      op: ast::UnaryOp::Negate,
+      expression: Box::new(ast::Expression::Constant(ast::Int {
+        value: 42,
+        span: Span::default(),
+      })),
+      span: Span::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_unary_nested() {
+    // -(~(-42))
+    let mut parser = Parser::new(vec![
+      token(TokenKind::Sub, "-"),
+      token(TokenKind::ParenOpen, "("),
+      token(TokenKind::BitNot, "~"),
+      token(TokenKind::ParenOpen, "("),
+      token(TokenKind::Int, "-42"),
+      token(TokenKind::ParenClose, ")"),
+      token(TokenKind::ParenClose, ")"),
+    ]);
+
+    let actual = parser.expression(0);
+
+    let expected = ast::Expression::Unary(ast::Unary {
+      op: ast::UnaryOp::Negate,
+      expression: Box::new(ast::Expression::Unary(ast::Unary {
+        op: ast::UnaryOp::BitNot,
+        expression: Box::new(ast::Expression::Constant(ast::Int {
+          value: -42,
+          span: Span::default(),
+        })),
+        span: Span::default(),
+      })),
+      span: Span::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_binary() {
+    let mut parser = Parser::new(vec![
+      token(TokenKind::Int, "1"),
+      token(TokenKind::Mul, "*"),
+      token(TokenKind::Int, "2"),
+    ]);
+
+    let actual = parser.expression(0);
+
+    let expected = ast::Expression::Binary(ast::Binary {
+      op: ast::BinaryOp::Mul,
+      left: Box::new(ast::Expression::Constant(ast::Int {
+        value: 1,
+        span: Span::default(),
+      })),
+      right: Box::new(ast::Expression::Constant(ast::Int {
+        value: 2,
+        span: Span::default(),
+      })),
+      span: Span::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
   }
 
   #[test]
@@ -431,8 +533,7 @@ mod tests {
     //          / \
     //         4   5
     // ```
-    let actual = parse(main! {
-      token(TokenKind::ReturnKw, "return"),
+    let mut parser = Parser::new(vec![
       token(TokenKind::Int, "1"),
       token(TokenKind::Mul, "*"),
       token(TokenKind::Int, "2"),
@@ -444,58 +545,48 @@ mod tests {
       token(TokenKind::Add, "+"),
       token(TokenKind::Int, "5"),
       token(TokenKind::ParenClose, ")"),
-      token(TokenKind::Semi, ";"),
-    })
-    .expect("should parse function definition");
+    ]);
 
-    let expected = ast::Program {
-      function: ast::Function {
-        name: ast::Ident {
-          value: "main".to_string().into(),
+    let actual = parser.expression(0);
+
+    let expected = ast::Expression::Binary(ast::Binary {
+      op: ast::BinaryOp::Sub,
+      left: Box::new(ast::Expression::Binary(ast::Binary {
+        op: ast::BinaryOp::Mul,
+        left: Box::new(ast::Expression::Constant(ast::Int {
+          value: 1,
           span: Span::default(),
-        },
-        body: ast::Statement::Return(ast::Expression::Binary(ast::Binary {
-          op: ast::BinaryOp::Sub,
-          left: Box::new(ast::Expression::Binary(ast::Binary {
-            op: ast::BinaryOp::Mul,
-            left: Box::new(ast::Expression::Constant(ast::Int {
-              value: 1,
-              span: Span::default(),
-            })),
-            right: Box::new(ast::Expression::Constant(ast::Int {
-              value: 2,
-              span: Span::default(),
-            })),
+        })),
+        right: Box::new(ast::Expression::Constant(ast::Int {
+          value: 2,
+          span: Span::default(),
+        })),
+        span: Span::default(),
+      })),
+      right: Box::new(ast::Expression::Binary(ast::Binary {
+        op: ast::BinaryOp::Mul,
+        left: Box::new(ast::Expression::Constant(ast::Int {
+          value: 3,
+          span: Span::default(),
+        })),
+        right: Box::new(ast::Expression::Binary(ast::Binary {
+          op: ast::BinaryOp::Add,
+          left: Box::new(ast::Expression::Constant(ast::Int {
+            value: 4,
             span: Span::default(),
           })),
-          right: Box::new(ast::Expression::Binary(ast::Binary {
-            op: ast::BinaryOp::Mul,
-            left: Box::new(ast::Expression::Constant(ast::Int {
-              value: 3,
-              span: Span::default(),
-            })),
-            right: Box::new(ast::Expression::Binary(ast::Binary {
-              op: ast::BinaryOp::Add,
-              left: Box::new(ast::Expression::Constant(ast::Int {
-                value: 4,
-                span: Span::default(),
-              })),
-              right: Box::new(ast::Expression::Constant(ast::Int {
-                value: 5,
-                span: Span::default(),
-              })),
-              span: Span::default(),
-            })),
+          right: Box::new(ast::Expression::Constant(ast::Int {
+            value: 5,
             span: Span::default(),
           })),
           span: Span::default(),
         })),
         span: Span::default(),
-      },
+      })),
       span: Span::default(),
-    };
+    });
 
-    assert_eq!(actual, expected);
+    assert_eq!(actual, Ok(expected));
   }
 
   #[test]
@@ -503,6 +594,7 @@ mod tests {
     let result = parse(vec![]);
 
     assert!(result.is_err());
+
     assert_eq!(
       result.unwrap_err().message,
       "the end of the input is reached, but more is expected"
@@ -525,6 +617,7 @@ mod tests {
     ]);
 
     assert!(result.is_err());
+
     assert_eq!(
       result.unwrap_err().message,
       "expected a '{', found 'return' instead"
@@ -536,6 +629,7 @@ mod tests {
     let result = parse(vec![token(TokenKind::Invalid, "@")]);
 
     assert!(result.is_err());
+
     assert_eq!(result.unwrap_err().message, "a '@' is not allowed");
   }
 
@@ -548,6 +642,7 @@ mod tests {
     ]);
 
     assert!(result.is_err());
+
     assert_eq!(
       result.unwrap_err().message,
       "the end of the input is reached, but more is expected"
