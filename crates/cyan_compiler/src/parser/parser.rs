@@ -285,16 +285,28 @@ impl Parser {
     let token = self.consume()?;
 
     let op = match token.kind {
+      // Arithmetic operators.
       | TokenKind::Add => ast::BinaryOp::Add,
+      | TokenKind::Div => ast::BinaryOp::Div,
+      | TokenKind::Mod => ast::BinaryOp::Mod,
+      | TokenKind::Mul => ast::BinaryOp::Mul,
+      | TokenKind::Sub => ast::BinaryOp::Sub,
+      // Bitwise operators.
       | TokenKind::BitAnd => ast::BinaryOp::BitAnd,
       | TokenKind::BitOr => ast::BinaryOp::BitOr,
       | TokenKind::BitShl => ast::BinaryOp::BitShl,
       | TokenKind::BitShr => ast::BinaryOp::BitShr,
       | TokenKind::BitXor => ast::BinaryOp::BitXor,
-      | TokenKind::Div => ast::BinaryOp::Div,
-      | TokenKind::Mod => ast::BinaryOp::Mod,
-      | TokenKind::Mul => ast::BinaryOp::Mul,
-      | TokenKind::Sub => ast::BinaryOp::Sub,
+      // Logical operators.
+      | TokenKind::And => ast::BinaryOp::And,
+      | TokenKind::Equal => ast::BinaryOp::Equal,
+      | TokenKind::Greater => ast::BinaryOp::Greater,
+      | TokenKind::GreaterEqual => ast::BinaryOp::GreaterEqual,
+      | TokenKind::Less => ast::BinaryOp::Less,
+      | TokenKind::LessEqual => ast::BinaryOp::LessEqual,
+      | TokenKind::NotEqual => ast::BinaryOp::NotEqual,
+      | TokenKind::Or => ast::BinaryOp::Or,
+      // Otherwise we got an unexpected token or an unary operator.
       | _ => {
         return Err(ParseError::new(
           format!("expected binary operator, found '{}'", token.value),
@@ -332,9 +344,15 @@ impl Parser {
       | TokenKind::Mul | TokenKind::Div | TokenKind::Mod => Some(50),
       | TokenKind::Add | TokenKind::Sub => Some(45),
       | TokenKind::BitShl | TokenKind::BitShr => Some(40),
+      | TokenKind::Less | TokenKind::LessEqual | TokenKind::Greater | TokenKind::GreaterEqual => {
+        Some(35)
+      },
+      | TokenKind::Equal | TokenKind::NotEqual => Some(30),
       | TokenKind::BitAnd => Some(25),
       | TokenKind::BitXor => Some(20),
       | TokenKind::BitOr => Some(15),
+      | TokenKind::And => Some(10),
+      | TokenKind::Or => Some(5),
       | _ => None,
     }
   }
@@ -347,8 +365,23 @@ mod tests {
   use crate::lexer::Token;
   use crate::span::Span;
 
-  fn token(kind: TokenKind, value: &str, span: Span) -> Token {
-    Token::new(kind, value.to_string(), span)
+  macro_rules! main {
+    ($($token: expr),+ $(,)?) => {
+      vec![
+        token(TokenKind::IntKw, "int"),
+        token(TokenKind::Ident, "main"),
+        token(TokenKind::ParenOpen, "("),
+        token(TokenKind::VoidKw, "void"),
+        token(TokenKind::ParenClose, ")"),
+        token(TokenKind::BraceOpen, "{"),
+        $($token),+,
+        token(TokenKind::BraceClose, "}"),
+      ]
+    };
+  }
+
+  fn token(kind: TokenKind, value: &str) -> Token {
+    Token::new(kind, value.to_string(), Span::default())
   }
 
   fn parse(tokens: Vec<Token>) -> Result<ast::Program> {
@@ -358,18 +391,11 @@ mod tests {
 
   #[test]
   fn parse_function_definition_parsing() {
-    let actual = parse(vec![
-      token(TokenKind::IntKw, "int", Span::default()),
-      token(TokenKind::Ident, "main", Span::default()),
-      token(TokenKind::ParenOpen, "(", Span::default()),
-      token(TokenKind::VoidKw, "void", Span::default()),
-      token(TokenKind::ParenClose, ")", Span::default()),
-      token(TokenKind::BraceOpen, "{", Span::default()),
-      token(TokenKind::ReturnKw, "return", Span::default()),
-      token(TokenKind::Int, "5", Span::default()),
-      token(TokenKind::Semi, ";", Span::default()),
-      token(TokenKind::BraceClose, "}", Span::default()),
-    ])
+    let actual = parse(main! {
+      token(TokenKind::ReturnKw, "return"),
+      token(TokenKind::Int, "5"),
+      token(TokenKind::Semi, ";"),
+    })
     .expect("should parse function definition");
 
     let expected = ast::Program {
@@ -405,28 +431,21 @@ mod tests {
     //          / \
     //         4   5
     // ```
-    let actual = parse(vec![
-      token(TokenKind::IntKw, "int", Span::default()),
-      token(TokenKind::Ident, "main", Span::default()),
-      token(TokenKind::ParenOpen, "(", Span::default()),
-      token(TokenKind::VoidKw, "void", Span::default()),
-      token(TokenKind::ParenClose, ")", Span::default()),
-      token(TokenKind::BraceOpen, "{", Span::default()),
-      token(TokenKind::ReturnKw, "return", Span::default()),
-      token(TokenKind::Int, "1", Span::default()),
-      token(TokenKind::Mul, "*", Span::default()),
-      token(TokenKind::Int, "2", Span::default()),
-      token(TokenKind::Sub, "-", Span::default()),
-      token(TokenKind::Int, "3", Span::default()),
-      token(TokenKind::Mul, "*", Span::default()),
-      token(TokenKind::ParenOpen, "(", Span::default()),
-      token(TokenKind::Int, "4", Span::default()),
-      token(TokenKind::Add, "+", Span::default()),
-      token(TokenKind::Int, "5", Span::default()),
-      token(TokenKind::ParenClose, ")", Span::default()),
-      token(TokenKind::Semi, ";", Span::default()),
-      token(TokenKind::BraceClose, "}", Span::default()),
-    ])
+    let actual = parse(main! {
+      token(TokenKind::ReturnKw, "return"),
+      token(TokenKind::Int, "1"),
+      token(TokenKind::Mul, "*"),
+      token(TokenKind::Int, "2"),
+      token(TokenKind::Sub, "-"),
+      token(TokenKind::Int, "3"),
+      token(TokenKind::Mul, "*"),
+      token(TokenKind::ParenOpen, "("),
+      token(TokenKind::Int, "4"),
+      token(TokenKind::Add, "+"),
+      token(TokenKind::Int, "5"),
+      token(TokenKind::ParenClose, ")"),
+      token(TokenKind::Semi, ";"),
+    })
     .expect("should parse function definition");
 
     let expected = ast::Program {
@@ -493,16 +512,16 @@ mod tests {
   #[test]
   fn parse_function_definition_missing_brace() {
     let result = parse(vec![
-      token(TokenKind::IntKw, "int", Span::default()),
-      token(TokenKind::Ident, "main", Span::default()),
-      token(TokenKind::ParenOpen, "(", Span::default()),
-      token(TokenKind::VoidKw, "void", Span::default()),
-      token(TokenKind::ParenClose, ")", Span::default()),
+      token(TokenKind::IntKw, "int"),
+      token(TokenKind::Ident, "main"),
+      token(TokenKind::ParenOpen, "("),
+      token(TokenKind::VoidKw, "void"),
+      token(TokenKind::ParenClose, ")"),
       // Missing opening brace
-      token(TokenKind::ReturnKw, "return", Span::default()),
-      token(TokenKind::Int, "5", Span::default()),
-      token(TokenKind::Semi, ";", Span::default()),
-      token(TokenKind::BraceClose, "}", Span::default()),
+      token(TokenKind::ReturnKw, "return"),
+      token(TokenKind::Int, "5"),
+      token(TokenKind::Semi, ";"),
+      token(TokenKind::BraceClose, "}"),
     ]);
 
     assert!(result.is_err());
@@ -514,7 +533,7 @@ mod tests {
 
   #[test]
   fn parse_invalid_token() {
-    let result = parse(vec![token(TokenKind::Invalid, "@", Span::default())]);
+    let result = parse(vec![token(TokenKind::Invalid, "@")]);
 
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().message, "a '@' is not allowed");
@@ -523,9 +542,9 @@ mod tests {
   #[test]
   fn parse_unexpected_end_of_input() {
     let result = parse(vec![
-      token(TokenKind::IntKw, "int", Span::default()),
-      token(TokenKind::Ident, "main", Span::default()),
-      token(TokenKind::ParenOpen, "(", Span::default()),
+      token(TokenKind::IntKw, "int"),
+      token(TokenKind::Ident, "main"),
+      token(TokenKind::ParenOpen, "("),
     ]);
 
     assert!(result.is_err());
