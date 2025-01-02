@@ -159,6 +159,7 @@ impl LoweringPass {
     match op {
       | tac::UnaryOp::BitNot => UnaryOp::Not,
       | tac::UnaryOp::Negate => UnaryOp::Neg,
+      | op => unimplemented!("lowering of unary operator '{op:?}' is not implemented"),
     }
   }
 
@@ -177,6 +178,7 @@ impl LoweringPass {
           "division cannot be handled like other binary operators",
         ))
       },
+      | op => unimplemented!("lowering of binary operator '{op:?}' is not implemented"),
     }
   }
 }

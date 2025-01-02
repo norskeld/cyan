@@ -392,19 +392,19 @@ mod tests {
 
   #[test]
   fn parse_precedence() {
-    // Original:  1 * 2  -  3 * (4 + 5)
-    // Grouped:  (1 * 2) - (3 * (4 + 5))
-    //                   ^ root
-    // Tree:
-    //
+    //  1 * 2  -  3 * (4 + 5)
+    // (1 * 2) - (3 * (4 + 5))
+    //         ^ root
+    // ```
     //      -
     //     / \
     //    /   \
-    //   * *
+    //   *     *
     //  / \   / \
     // 1  2  3   +
     //          / \
     //         4   5
+    // ```
     let actual = parse(vec![
       token(TokenKind::IntKw, "int", Span::default()),
       token(TokenKind::Ident, "main", Span::default()),

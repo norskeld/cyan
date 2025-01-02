@@ -8,35 +8,44 @@ pub enum TokenKind {
   IntKw,
   ReturnKw,
   VoidKw,
-
-  // Operators.
+  // Arithmetic operators.
   Add,
-  BitAnd,
-  BitNot,
-  BitOr,
-  BitShl,
-  BitShr,
-  BitXor,
   Dec,
   Div,
   Inc,
   Mod,
   Mul,
   Sub,
-
+  // Bitwise operators.
+  BitAnd,
+  BitNot,
+  BitOr,
+  BitShl,
+  BitShr,
+  BitXor,
+  // Logical operators.
+  And,
+  Equal,
+  Greater,
+  GreaterEqual,
+  Less,
+  LessEqual,
+  NotEqual,
+  Or,
+  // Other operators.
+  Assign,
+  Bang,
   // Punctuation.
   BraceClose,
   BraceOpen,
   ParenClose,
   ParenOpen,
   Semi,
-
   // Non-terminals.
   Int,
   Ident,
   Newline,
   Whitespace,
-
   // Other.
   Eof,
   Invalid,
@@ -49,35 +58,44 @@ impl TokenKind {
       | TokenKind::IntKw => "the 'int' keyword",
       | TokenKind::ReturnKw => "the 'return' keyword",
       | TokenKind::VoidKw => "the 'void' keyword",
-
-      // Operators.
+      // Arithmetic operators.
       | TokenKind::Add => "a '+'",
-      | TokenKind::BitAnd => "a '&'",
-      | TokenKind::BitNot => "a '~'",
-      | TokenKind::BitOr => "a '|'",
-      | TokenKind::BitShl => "a '<<'",
-      | TokenKind::BitShr => "a '>>'",
-      | TokenKind::BitXor => "a '^'",
       | TokenKind::Dec => "a '--'",
       | TokenKind::Div => "a '/'",
       | TokenKind::Inc => "a '++'",
       | TokenKind::Mod => "a '%'",
       | TokenKind::Mul => "a '*'",
       | TokenKind::Sub => "a '-'",
-
+      // Bitwise operators.
+      | TokenKind::BitAnd => "a '&'",
+      | TokenKind::BitNot => "a '~'",
+      | TokenKind::BitOr => "a '|'",
+      | TokenKind::BitShl => "a '<<'",
+      | TokenKind::BitShr => "a '>>'",
+      | TokenKind::BitXor => "a '^'",
+      // Logical operators.
+      | TokenKind::And => "a '&&'",
+      | TokenKind::Equal => "a '=='",
+      | TokenKind::Greater => "a '>'",
+      | TokenKind::GreaterEqual => "a '>='",
+      | TokenKind::Less => "a '<'",
+      | TokenKind::LessEqual => "a '<='",
+      | TokenKind::NotEqual => "a '!='",
+      | TokenKind::Or => "a '||'",
+      // Other operators.
+      | TokenKind::Bang => "a '!'",
+      | TokenKind::Assign => "a '='",
       // Punctuation.
       | TokenKind::BraceClose => "a '}'",
       | TokenKind::BraceOpen => "a '{'",
       | TokenKind::ParenClose => "a ')'",
       | TokenKind::ParenOpen => "a '('",
       | TokenKind::Semi => "a ';'",
-
       // Non-terminals.
       | TokenKind::Int => "an integer",
       | TokenKind::Ident => "an identifier",
       | TokenKind::Newline => "a newline",
       | TokenKind::Whitespace => "whitespace",
-
       // Other.
       | TokenKind::Eof => "the end of input",
       | TokenKind::Invalid => "an invalid token",
@@ -125,16 +143,27 @@ impl Token {
   pub fn is_binary_operator(&self) -> bool {
     matches!(
       self.kind,
+      // Arithmetic operators.
       TokenKind::Add
         | TokenKind::Sub
         | TokenKind::Mul
         | TokenKind::Div
         | TokenKind::Mod
+        // Bitwise operators.
         | TokenKind::BitAnd
         | TokenKind::BitOr
         | TokenKind::BitShl
         | TokenKind::BitShr
         | TokenKind::BitXor
+        // Logical operators.
+        | TokenKind::And
+        | TokenKind::Equal
+        | TokenKind::Greater
+        | TokenKind::GreaterEqual
+        | TokenKind::Less
+        | TokenKind::LessEqual
+        | TokenKind::NotEqual
+        | TokenKind::Or
     )
   }
 }

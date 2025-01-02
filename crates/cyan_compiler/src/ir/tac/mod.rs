@@ -57,18 +57,28 @@ impl fmt::Debug for Value {
 pub enum UnaryOp {
   BitNot,
   Negate,
+  Not,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BinaryOp {
+  // Arithmetics operators.
   Add,
+  Div,
+  Mod,
+  Mul,
+  Sub,
+  // Bitwise operators.
   BitAnd,
   BitOr,
   BitShl,
   BitShr,
   BitXor,
-  Div,
-  Mod,
-  Mul,
-  Sub,
+  // Logical operators.
+  And,
+  Equal,
+  Greater,
+  GreaterEqual,
+  Less,
+  LessEqual,
 }

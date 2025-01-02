@@ -10,7 +10,7 @@ pub const CARRIAGE_RETURN: u8 = b'\r';
 
 // Printable characters.
 pub const SPACE: u8 = b' ';
-// pub const BANG: u8 = b'!';
+pub const BANG: u8 = b'!';
 // pub const HASH: u8 = b'#';
 // pub const DOLLAR: u8 = b'$';
 pub const PERCENT: u8 = b'%';
@@ -33,7 +33,7 @@ pub const SLASH: u8 = b'/';
 // pub const COLON: u8 = b':';
 pub const SEMICOLON: u8 = b';';
 pub const LESS: u8 = b'<';
-// pub const EQUAL: u8 = b'=';
+pub const EQUAL: u8 = b'=';
 pub const GREATER: u8 = b'>';
 // pub const BACKSLASH: u8 = b'\\';
 pub const PIPE: u8 = b'|';
