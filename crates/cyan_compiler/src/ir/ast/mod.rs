@@ -117,6 +117,16 @@ spanned! {
   }
 }
 
+impl Binary {
+  pub fn is_and(&self) -> bool {
+    matches!(self.op, BinaryOp::And)
+  }
+
+  pub fn is_or(&self) -> bool {
+    matches!(self.op, BinaryOp::Or)
+  }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BinaryOp {
   // Arithmetic operators.
