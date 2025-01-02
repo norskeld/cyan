@@ -53,7 +53,7 @@ impl LoweringPass {
 
     for instruction in tac_instructions {
       match instruction {
-        | tac::Instruction::Return { value } => {
+        | tac::Instruction::Return(value) => {
           let src = self.lower_value(value);
           let dst = Operand::Reg(Reg::AX);
 
@@ -142,6 +142,7 @@ impl LoweringPass {
             },
           }
         },
+        | _ => unimplemented!("lowering of instruction '{instruction:?}' is not implemented"),
       }
     }
 

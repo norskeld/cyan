@@ -92,6 +92,11 @@ instruction =
   | Return(value value)
   | Unary(unary_op op, value src, value dst)
   | Binary(binary_op op, value left, value right, value dst)
+  | Copy(value src, value dst)
+  | Jump(identifier)
+  | JumpIfZero(value condition, identifier target)
+  | JumpIfNotZero(value condition, identifier target)
+  | Label(identifier)
 
 value =
   | Constant(int)
@@ -100,18 +105,25 @@ value =
 unary_op =
   | BitNot
   | Negate
+  | Not
 
 binary_op =
   | Add
+  | Div
+  | Mod
+  | Mul
+  | Sub
   | BitAnd
   | BitOr
   | BitShl
   | BitShr
   | BitXor
-  | Div
-  | Mod
-  | Mul
-  | Sub
+  | Equal
+  | Greater
+  | GreaterEqual
+  | Less
+  | LessEqual
+  | NotEqual
 ```
 </details>
 

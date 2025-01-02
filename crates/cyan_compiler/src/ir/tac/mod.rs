@@ -22,9 +22,7 @@ pub struct Function {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Instruction {
-  Return {
-    value: Value,
-  },
+  Return(Value),
   Unary {
     op: UnaryOp,
     src: Value,
@@ -36,6 +34,20 @@ pub enum Instruction {
     right: Value,
     dst: Value,
   },
+  Copy {
+    src: Value,
+    dst: Value,
+  },
+  Jump(Intern<String>),
+  JumpIfZero {
+    condition: Value,
+    target: Intern<String>,
+  },
+  JumpIfNotZero {
+    condition: Value,
+    target: Intern<String>,
+  },
+  Label(Intern<String>),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
