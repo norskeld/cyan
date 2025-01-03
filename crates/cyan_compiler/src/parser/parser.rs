@@ -214,8 +214,8 @@ impl Parser {
 
     match token.kind {
       | TokenKind::Int => self.constant(),
-      | TokenKind::BitNot | TokenKind::Sub => self.unary(),
       | TokenKind::ParenOpen => self.group(),
+      | TokenKind::BitNot | TokenKind::Sub | TokenKind::Bang => self.unary(),
       | _ => {
         Err(ParseError::new(
           format!("expected expression, found '{}'", token.value),
@@ -260,6 +260,7 @@ impl Parser {
     let op = match token.kind {
       | TokenKind::BitNot => ast::UnaryOp::BitNot,
       | TokenKind::Sub => ast::UnaryOp::Negate,
+      | TokenKind::Bang => ast::UnaryOp::Not,
       | _ => {
         return Err(ParseError::new(
           format!("expected unary operator, found '{}'", token.value),
@@ -488,6 +489,29 @@ mod tests {
       })),
       span: Span::default(),
     });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_unary_not() {
+    let mut parser = Parser::new(vec![
+      token(TokenKind::ReturnKw, "return"),
+      token(TokenKind::Bang, "!"),
+      token(TokenKind::Int, "42"),
+      token(TokenKind::Semi, ";"),
+    ]);
+
+    let actual = parser.statement();
+
+    let expected = ast::Statement::Return(ast::Expression::Unary(ast::Unary {
+      op: ast::UnaryOp::Not,
+      expression: Box::new(ast::Expression::Constant(ast::Int {
+        value: 42,
+        span: Span::default(),
+      })),
+      span: Span::default(),
+    }));
 
     assert_eq!(actual, Ok(expected));
   }
