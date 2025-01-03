@@ -95,19 +95,17 @@ impl Parser {
 
   /// Checks if the next token is valid, i.e. not [TokenKind::Invalid] and not [TokenKind::Eof].
   fn check_token(&self, token: &Token) -> Result<()> {
-    let location = token.location.clone();
-
     match token.kind {
       | TokenKind::Invalid => {
         Err(ParseError::new(
           format!("a '{}' is not allowed", token.value),
-          location,
+          token.location,
         ))
       },
       | TokenKind::Eof => {
         Err(ParseError::new(
           "the end of the input is reached, but more is expected",
-          location,
+          token.location,
         ))
       },
       | _ => Ok(()),
@@ -125,7 +123,7 @@ impl Parser {
           kind.description(),
           token.value
         ),
-        token.location.clone(),
+        token.location,
       ));
     }
 
@@ -165,7 +163,7 @@ impl Parser {
       | _ => {
         Err(ParseError::new(
           format!("expected statement, found '{}'", token.value),
-          token.location.clone(),
+          token.location,
         ))
       },
     }
@@ -193,8 +191,8 @@ impl Parser {
           let op = self.binary()?;
           let right = self.expression(precedence + 1)?;
 
-          let left_location = left.location().clone();
-          let right_location = right.location().clone();
+          let left_location = *left.location();
+          let right_location = *right.location();
 
           left = ast::Expression::Binary(ast::Binary {
             op,
@@ -223,7 +221,7 @@ impl Parser {
       | _ => {
         Err(ParseError::new(
           format!("expected expression, found '{}'", token.value),
-          token.location.clone(),
+          token.location,
         ))
       },
     }
@@ -247,13 +245,13 @@ impl Parser {
     let value = token.value.parse().map_err(|_| {
       ParseError::new(
         format!("expected a constant, found '{}'", token.value),
-        token.location.clone(),
+        token.location,
       )
     })?;
 
     Ok(ast::Expression::Constant(ast::Int {
       value,
-      location: token.location.clone(),
+      location: token.location,
     }))
   }
 
@@ -268,7 +266,7 @@ impl Parser {
       | _ => {
         return Err(ParseError::new(
           format!("expected unary operator, found '{}'", token.value),
-          token.location.clone(),
+          token.location,
         ))
       },
     };
@@ -313,7 +311,7 @@ impl Parser {
       | _ => {
         return Err(ParseError::new(
           format!("expected binary operator, found '{}'", token.value),
-          token.location.clone(),
+          token.location,
         ))
       },
     };
@@ -328,7 +326,7 @@ impl Parser {
     if token.kind != TokenKind::Ident {
       return Err(ParseError::new(
         format!("expected identifier, found '{}'", token.value),
-        token.location.clone(),
+        token.location,
       ));
     }
 
