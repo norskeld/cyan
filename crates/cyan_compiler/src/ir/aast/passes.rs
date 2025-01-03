@@ -386,15 +386,27 @@ impl PseudoReplacementPass {
 
         Ok(Instruction::Idiv(operand))
       },
-      | Instruction::Cdq => Ok(Instruction::Cdq),
-      | Instruction::Ret => Ok(Instruction::Ret),
+      | Instruction::Cmp { left, right } => {
+        let left = self.replace_operand(left);
+        let right = self.replace_operand(right);
+
+        Ok(Instruction::Cmp { left, right })
+      },
+      | Instruction::SetCC { code, dst } => {
+        let code = *code;
+        let dst = self.replace_operand(dst);
+
+        Ok(Instruction::SetCC { code, dst })
+      },
+      | other @ (Instruction::Cdq
+      | Instruction::Ret
+      | Instruction::Jmp(..)
+      | Instruction::JmpCC { .. }
+      | Instruction::Label(..)) => Ok(*other),
       | Instruction::AllocateStack(..) => {
         Err(PseudoReplacementError::new(
           "unexpected AllocateStack instruction",
         ))
-      },
-      | other => {
-        unimplemented!("pseudo replacement pass for instruction '{other:?}' is not implemented")
       },
     }
   }
@@ -490,7 +502,7 @@ impl InstructionFixupPass {
           Instruction::Mov { src: reg, dst },
         ])
       },
-      // Add/Sub/And/Or/Xor can't use memory addresses for both operands.
+      // Add/Sub/BitAnd/BitOr/BitXor can't use memory addresses for both operands.
       | Instruction::Binary {
         op: op @ (BinaryOp::Add | BinaryOp::Sub | BinaryOp::And | BinaryOp::Or | BinaryOp::Xor),
         src: src @ Operand::Stack(..),
@@ -524,6 +536,36 @@ impl InstructionFixupPass {
         Ok(vec![
           Instruction::Mov { src, dst: reg },
           Instruction::Idiv(reg),
+        ])
+      },
+      // Cmp's both operands can't be in memory.
+      | Instruction::Cmp {
+        left: left @ Operand::Stack(..),
+        right: right @ Operand::Stack(..),
+      } => {
+        let reg = Operand::Reg(Reg::R10);
+
+        Ok(vec![
+          Instruction::Mov {
+            src: left,
+            dst: reg,
+          },
+          Instruction::Cmp { left: reg, right },
+        ])
+      },
+      // Cmp's second operand can't be a constant.
+      | Instruction::Cmp {
+        left,
+        right: right @ Operand::Imm(..),
+      } => {
+        let reg = Operand::Reg(Reg::R11);
+
+        Ok(vec![
+          Instruction::Mov {
+            src: right,
+            dst: reg,
+          },
+          Instruction::Cmp { left, right: reg },
         ])
       },
       | other => Ok(vec![other]),
