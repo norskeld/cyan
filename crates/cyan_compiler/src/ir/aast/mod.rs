@@ -39,8 +39,8 @@ pub enum Instruction {
   },
   Jmp(Intern<String>),
   JmpCC {
-    cond: CondCode,
-    target: Intern<String>,
+    code: CondCode,
+    label: Intern<String>,
   },
   SetCC {
     code: CondCode,

@@ -41,11 +41,11 @@ pub enum Instruction {
   Jump(Intern<String>),
   JumpIfZero {
     condition: Value,
-    target: Intern<String>,
+    label: Intern<String>,
   },
   JumpIfNotZero {
     condition: Value,
-    target: Intern<String>,
+    label: Intern<String>,
   },
   Label(Intern<String>),
 }

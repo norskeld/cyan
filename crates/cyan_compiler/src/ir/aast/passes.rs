@@ -189,10 +189,10 @@ impl LoweringPass {
 
           instructions.push(Instruction::Mov { src, dst });
         },
-        | tac::Instruction::Jump(identifier) => {
-          instructions.push(Instruction::Jmp(*identifier));
+        | tac::Instruction::Jump(label) => {
+          instructions.push(Instruction::Jmp(*label));
         },
-        | tac::Instruction::JumpIfZero { condition, target } => {
+        | tac::Instruction::JumpIfZero { condition, label } => {
           let right = self.lower_value(condition);
 
           instructions.extend(vec![
@@ -201,12 +201,12 @@ impl LoweringPass {
               right,
             },
             Instruction::JmpCC {
-              cond: CondCode::E,
-              target: *target,
+              code: CondCode::E,
+              label: *label,
             },
           ])
         },
-        | tac::Instruction::JumpIfNotZero { condition, target } => {
+        | tac::Instruction::JumpIfNotZero { condition, label } => {
           let right = self.lower_value(condition);
 
           instructions.extend(vec![
@@ -215,13 +215,13 @@ impl LoweringPass {
               right,
             },
             Instruction::JmpCC {
-              cond: CondCode::NE,
-              target: *target,
+              code: CondCode::NE,
+              label: *label,
             },
           ])
         },
-        | tac::Instruction::Label(identifier) => {
-          instructions.push(Instruction::Label(*identifier));
+        | tac::Instruction::Label(label) => {
+          instructions.push(Instruction::Label(*label));
         },
       }
     }
