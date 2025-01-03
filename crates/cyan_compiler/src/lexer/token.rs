@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::span::Span;
+use crate::location::Location;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenKind {
@@ -107,23 +107,27 @@ impl TokenKind {
 pub struct Token {
   pub kind: TokenKind,
   pub value: String,
-  pub span: Span,
+  pub location: Location,
 }
 
 impl Token {
-  pub fn new(kind: TokenKind, value: String, span: Span) -> Self {
-    Self { kind, value, span }
+  pub fn new(kind: TokenKind, value: String, location: Location) -> Self {
+    Self {
+      kind,
+      value,
+      location,
+    }
   }
 
   /// Returns a token signalling unexpected input. The token contains the invalid character(s).
-  pub fn invalid(value: String, span: Span) -> Self {
-    Self::new(TokenKind::Invalid, value, span)
+  pub fn invalid(value: String, location: Location) -> Self {
+    Self::new(TokenKind::Invalid, value, location)
   }
 
   /// Returns a token that signals the end of the input stream. Using it so we don't need to
   /// wrap/unwrap every token in [Option].
-  pub fn eof(span: Span) -> Self {
-    Self::new(TokenKind::Eof, String::new(), span)
+  pub fn eof(location: Location) -> Self {
+    Self::new(TokenKind::Eof, String::new(), location)
   }
 
   /// Returns `true` if the token is the end of input token.
@@ -170,7 +174,7 @@ impl Token {
 
 impl Default for Token {
   fn default() -> Self {
-    Self::eof(Span::default())
+    Self::eof(Location::default())
   }
 }
 

@@ -7,8 +7,6 @@ use std::fmt;
 use internment::Intern;
 pub use passes::*;
 
-use crate::span::Span;
-
 #[derive(Debug, PartialEq, Eq)]
 pub struct Program {
   pub function: Function,

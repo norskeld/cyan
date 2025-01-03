@@ -2,24 +2,24 @@ use thiserror::Error;
 
 use crate::ir::ast;
 use crate::lexer::{Token, TokenKind};
-use crate::span::{Span, Spanned};
+use crate::location::{Located, Location};
 
 type Result<T> = std::result::Result<T, ParseError>;
 
 #[derive(Debug, Error, PartialEq, Eq)]
-#[error("parse error [{span}]: {message}")]
+#[error("parse error {location}: {message}")]
 pub struct ParseError {
   /// The error message.
   pub message: String,
-  /// The span of the error.
-  pub span: Span,
+  /// The location of the error.
+  pub location: Location,
 }
 
 impl ParseError {
-  pub fn new(message: impl AsRef<str> + Into<String>, span: Span) -> Self {
+  pub fn new(message: impl AsRef<str> + Into<String>, location: Location) -> Self {
     Self {
       message: message.into(),
-      span,
+      location,
     }
   }
 }
@@ -43,12 +43,12 @@ impl Parser {
 
   /// Parses the input and returns the AST.
   pub fn parse(&mut self) -> Result<ast::Program> {
-    let init_span = Span::default();
+    let init_location = Location::default();
     let function = self.function()?;
 
-    let span = Span::merge(&init_span, &function.span);
+    let location = Location::merge(&init_location, &function.location);
 
-    Ok(ast::Program { function, span })
+    Ok(ast::Program { function, location })
   }
 
   /// Returns the next token, skipping whitespace and comments.
@@ -58,7 +58,7 @@ impl Parser {
         self
           .tokens
           .next()
-          .unwrap_or_else(|| Token::eof(Span::default()))
+          .unwrap_or_else(|| Token::eof(Location::default()))
       });
 
       match token.kind {
@@ -95,19 +95,19 @@ impl Parser {
 
   /// Checks if the next token is valid, i.e. not [TokenKind::Invalid] and not [TokenKind::Eof].
   fn check_token(&self, token: &Token) -> Result<()> {
-    let span = token.span.clone();
+    let location = token.location.clone();
 
     match token.kind {
       | TokenKind::Invalid => {
         Err(ParseError::new(
           format!("a '{}' is not allowed", token.value),
-          span,
+          location,
         ))
       },
       | TokenKind::Eof => {
         Err(ParseError::new(
           "the end of the input is reached, but more is expected",
-          span,
+          location,
         ))
       },
       | _ => Ok(()),
@@ -125,7 +125,7 @@ impl Parser {
           kind.description(),
           token.value
         ),
-        token.span.clone(),
+        token.location.clone(),
       ));
     }
 
@@ -147,9 +147,13 @@ impl Parser {
 
     let body = self.statement()?;
     let close = self.expect(TokenKind::BraceClose)?;
-    let span = Span::merge(&start.span, &close.span);
+    let location = Location::merge(&start.location, &close.location);
 
-    Ok(ast::Function { name, body, span })
+    Ok(ast::Function {
+      name,
+      body,
+      location,
+    })
   }
 
   /// Parses a statement.
@@ -161,7 +165,7 @@ impl Parser {
       | _ => {
         Err(ParseError::new(
           format!("expected statement, found '{}'", token.value),
-          token.span.clone(),
+          token.location.clone(),
         ))
       },
     }
@@ -189,14 +193,14 @@ impl Parser {
           let op = self.binary()?;
           let right = self.expression(precedence + 1)?;
 
-          let left_span = left.span().clone();
-          let right_span = right.span().clone();
+          let left_location = left.location().clone();
+          let right_location = right.location().clone();
 
           left = ast::Expression::Binary(ast::Binary {
             op,
             left: Box::new(left),
             right: Box::new(right),
-            span: Span::merge(&left_span, &right_span),
+            location: Location::merge(&left_location, &right_location),
           });
 
           next = self.peek();
@@ -219,7 +223,7 @@ impl Parser {
       | _ => {
         Err(ParseError::new(
           format!("expected expression, found '{}'", token.value),
-          token.span.clone(),
+          token.location.clone(),
         ))
       },
     }
@@ -243,13 +247,13 @@ impl Parser {
     let value = token.value.parse().map_err(|_| {
       ParseError::new(
         format!("expected a constant, found '{}'", token.value),
-        token.span.clone(),
+        token.location.clone(),
       )
     })?;
 
     Ok(ast::Expression::Constant(ast::Int {
       value,
-      span: token.span.clone(),
+      location: token.location.clone(),
     }))
   }
 
@@ -264,18 +268,18 @@ impl Parser {
       | _ => {
         return Err(ParseError::new(
           format!("expected unary operator, found '{}'", token.value),
-          token.span.clone(),
+          token.location.clone(),
         ))
       },
     };
 
     let expression = self.factor()?;
-    let span = Span::merge(&token.span, expression.span());
+    let location = Location::merge(&token.location, expression.location());
 
     Ok(ast::Expression::Unary(ast::Unary {
       op,
       expression: Box::new(expression),
-      span,
+      location,
     }))
   }
 
@@ -309,7 +313,7 @@ impl Parser {
       | _ => {
         return Err(ParseError::new(
           format!("expected binary operator, found '{}'", token.value),
-          token.span.clone(),
+          token.location.clone(),
         ))
       },
     };
@@ -324,13 +328,13 @@ impl Parser {
     if token.kind != TokenKind::Ident {
       return Err(ParseError::new(
         format!("expected identifier, found '{}'", token.value),
-        token.span.clone(),
+        token.location.clone(),
       ));
     }
 
     Ok(ast::Ident {
       value: token.value.into(),
-      span: token.span,
+      location: token.location,
     })
   }
 
@@ -362,10 +366,10 @@ mod tests {
   use super::*;
   use crate::ir::ast;
   use crate::lexer::Token;
-  use crate::span::Span;
+  use crate::location::Location;
 
   fn token(kind: TokenKind, value: &str) -> Token {
-    Token::new(kind, value.to_string(), Span::default())
+    Token::new(kind, value.to_string(), Location::default())
   }
 
   /// Tries to parse the whole program from the given tokens.
@@ -395,15 +399,15 @@ mod tests {
       function: ast::Function {
         name: ast::Ident {
           value: "main".to_string().into(),
-          span: Span::default(),
+          location: Location::default(),
         },
         body: ast::Statement::Return(ast::Expression::Constant(ast::Int {
           value: 42,
-          span: Span::default(),
+          location: Location::default(),
         })),
-        span: Span::default(),
+        location: Location::default(),
       },
-      span: Span::default(),
+      location: Location::default(),
     };
 
     assert_eq!(actual, Ok(expected));
@@ -421,7 +425,7 @@ mod tests {
 
     let expected = ast::Statement::Return(ast::Expression::Constant(ast::Int {
       value: 42,
-      span: Span::default(),
+      location: Location::default(),
     }));
 
     assert_eq!(actual, Ok(expected));
@@ -435,7 +439,7 @@ mod tests {
 
     let expected = ast::Expression::Constant(ast::Int {
       value: 42,
-      span: Span::default(),
+      location: Location::default(),
     });
 
     assert_eq!(actual, Ok(expected));
@@ -454,9 +458,9 @@ mod tests {
       op: ast::UnaryOp::Negate,
       expression: Box::new(ast::Expression::Constant(ast::Int {
         value: 42,
-        span: Span::default(),
+        location: Location::default(),
       })),
-      span: Span::default(),
+      location: Location::default(),
     });
 
     assert_eq!(actual, Ok(expected));
@@ -483,11 +487,11 @@ mod tests {
         op: ast::UnaryOp::BitNot,
         expression: Box::new(ast::Expression::Constant(ast::Int {
           value: -42,
-          span: Span::default(),
+          location: Location::default(),
         })),
-        span: Span::default(),
+        location: Location::default(),
       })),
-      span: Span::default(),
+      location: Location::default(),
     });
 
     assert_eq!(actual, Ok(expected));
@@ -508,9 +512,9 @@ mod tests {
       op: ast::UnaryOp::Not,
       expression: Box::new(ast::Expression::Constant(ast::Int {
         value: 42,
-        span: Span::default(),
+        location: Location::default(),
       })),
-      span: Span::default(),
+      location: Location::default(),
     }));
 
     assert_eq!(actual, Ok(expected));
@@ -530,13 +534,13 @@ mod tests {
       op: ast::BinaryOp::Mul,
       left: Box::new(ast::Expression::Constant(ast::Int {
         value: 1,
-        span: Span::default(),
+        location: Location::default(),
       })),
       right: Box::new(ast::Expression::Constant(ast::Int {
         value: 2,
-        span: Span::default(),
+        location: Location::default(),
       })),
-      span: Span::default(),
+      location: Location::default(),
     });
 
     assert_eq!(actual, Ok(expected));
@@ -579,35 +583,35 @@ mod tests {
         op: ast::BinaryOp::Mul,
         left: Box::new(ast::Expression::Constant(ast::Int {
           value: 1,
-          span: Span::default(),
+          location: Location::default(),
         })),
         right: Box::new(ast::Expression::Constant(ast::Int {
           value: 2,
-          span: Span::default(),
+          location: Location::default(),
         })),
-        span: Span::default(),
+        location: Location::default(),
       })),
       right: Box::new(ast::Expression::Binary(ast::Binary {
         op: ast::BinaryOp::Mul,
         left: Box::new(ast::Expression::Constant(ast::Int {
           value: 3,
-          span: Span::default(),
+          location: Location::default(),
         })),
         right: Box::new(ast::Expression::Binary(ast::Binary {
           op: ast::BinaryOp::Add,
           left: Box::new(ast::Expression::Constant(ast::Int {
             value: 4,
-            span: Span::default(),
+            location: Location::default(),
           })),
           right: Box::new(ast::Expression::Constant(ast::Int {
             value: 5,
-            span: Span::default(),
+            location: Location::default(),
           })),
-          span: Span::default(),
+          location: Location::default(),
         })),
-        span: Span::default(),
+        location: Location::default(),
       })),
-      span: Span::default(),
+      location: Location::default(),
     });
 
     assert_eq!(actual, Ok(expected));
