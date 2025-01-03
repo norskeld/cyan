@@ -150,11 +150,16 @@ name = "cyan_compiler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cyan_reporting",
  "indoc",
  "internment",
  "pretty_assertions",
  "thiserror",
 ]
+
+[[package]]
+name = "cyan_reporting"
+version = "0.1.0"
 
 [[package]]
 name = "diff"

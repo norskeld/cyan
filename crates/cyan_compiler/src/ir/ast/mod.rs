@@ -21,11 +21,11 @@ macro_rules! located {
         $field_vis $field : $ty,
       )*
       /// Contains the node's location.
-      pub location: crate::location::Location,
+      pub location: cyan_reporting::Location,
     }
 
-    impl crate::location::Located for $name {
-      fn location(&self) -> &crate::location::Location {
+    impl cyan_reporting::Located for $name {
+      fn location(&self) -> &cyan_reporting::Location {
         &self.location
       }
     }
@@ -49,8 +49,8 @@ macro_rules! located {
       ),*
     }
 
-    impl crate::location::Located for $name {
-      fn location(&self) -> &crate::location::Location {
+    impl cyan_reporting::Located for $name {
+      fn location(&self) -> &cyan_reporting::Location {
         match self {
           $($name::$variant(expr) => expr.location(),)*
         }

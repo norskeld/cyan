@@ -1,8 +1,8 @@
+use cyan_reporting::Location;
 use thiserror::Error;
 
 use crate::ir::ast;
 use crate::ir::tac::*;
-use crate::location::Location;
 
 #[derive(Debug, Error)]
 #[error("AST lowering error {location}: {message}")]
