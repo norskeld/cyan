@@ -2,21 +2,22 @@ use thiserror::Error;
 
 use crate::ir::ast;
 use crate::ir::tac::*;
+use crate::location::Location;
 
 #[derive(Debug, Error)]
-#[error("AST lowering error [{span}]: {message}")]
+#[error("AST lowering error {location}: {message}")]
 pub struct LoweringError {
   /// The error message.
   pub message: String,
-  /// The span of the error.
-  pub span: Span,
+  /// The location of the error.
+  pub location: Location,
 }
 
 impl LoweringError {
-  pub fn new(message: impl AsRef<str> + Into<String>, span: Span) -> Self {
+  pub fn new(message: impl AsRef<str> + Into<String>, location: Location) -> Self {
     Self {
       message: message.into(),
-      span,
+      location,
     }
   }
 }
@@ -320,7 +321,7 @@ impl LoweringPass {
       | ast::BinaryOp::And | ast::BinaryOp::Or => {
         Err(LoweringError::new(
           "|| and && cannot be directly lowered to TAC",
-          binary.span.clone(),
+          binary.location.clone(),
         ))
       },
     }

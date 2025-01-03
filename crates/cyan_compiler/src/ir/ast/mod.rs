@@ -2,8 +2,8 @@
 
 use internment::Intern;
 
-/// A helper macro that adds a `span` field to an AST node and implements [Spanned] for it.
-macro_rules! spanned {
+/// A helper macro that adds a `location` field to an AST node and implements [Located] for it.
+macro_rules! located {
   // Handle structs.
   (
     $(#[$outer:meta])*
@@ -20,13 +20,13 @@ macro_rules! spanned {
         $(#[$inner])*
         $field_vis $field : $ty,
       )*
-      /// Contains the node's span.
-      pub span: crate::span::Span,
+      /// Contains the node's location.
+      pub location: crate::location::Location,
     }
 
-    impl crate::span::Spanned for $name {
-      fn span(&self) -> &crate::span::Span {
-        &self.span
+    impl crate::location::Located for $name {
+      fn location(&self) -> &crate::location::Location {
+        &self.location
       }
     }
   };
@@ -49,24 +49,24 @@ macro_rules! spanned {
       ),*
     }
 
-    impl crate::span::Spanned for $name {
-      fn span(&self) -> &crate::span::Span {
+    impl crate::location::Located for $name {
+      fn location(&self) -> &crate::location::Location {
         match self {
-          $($name::$variant(expr) => expr.span(),)*
+          $($name::$variant(expr) => expr.location(),)*
         }
       }
     }
   };
 }
 
-spanned! {
+located! {
   #[derive(Debug, PartialEq, Eq)]
   pub struct Program {
     pub function: Function,
   }
 }
 
-spanned! {
+located! {
   #[derive(Debug, PartialEq, Eq)]
   pub struct Function {
     pub name: Ident,
@@ -74,14 +74,14 @@ spanned! {
   }
 }
 
-spanned! {
+located! {
   #[derive(Debug, PartialEq, Eq)]
   pub enum Statement {
     Return(Expression),
   }
 }
 
-spanned! {
+located! {
   #[derive(Clone, Debug, PartialEq, Eq)]
   pub enum Expression {
     Constant(Int),
@@ -90,7 +90,7 @@ spanned! {
   }
 }
 
-spanned! {
+located! {
   #[derive(Clone, Debug, PartialEq, Eq)]
   pub struct Unary {
     pub op: UnaryOp,
@@ -108,7 +108,7 @@ pub enum UnaryOp {
   Not,
 }
 
-spanned! {
+located! {
   #[derive(Clone, Debug, PartialEq, Eq)]
   pub struct Binary {
     pub op: BinaryOp,
@@ -152,14 +152,14 @@ pub enum BinaryOp {
   Or,
 }
 
-spanned! {
+located! {
   #[derive(Clone, Debug, PartialEq, Eq)]
   pub struct Int {
     pub value: isize,
   }
 }
 
-spanned! {
+located! {
   #[derive(Clone, Debug, PartialEq, Eq)]
   pub struct Ident {
     pub value: Intern<String>,

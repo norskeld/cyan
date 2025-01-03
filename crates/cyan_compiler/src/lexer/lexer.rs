@@ -1,5 +1,6 @@
 use super::ascii::*;
 use super::token::{Token, TokenKind};
+use crate::location::Location;
 use crate::span::Span;
 
 pub struct Lexer<'i> {
@@ -91,16 +92,16 @@ impl<'i> Lexer<'i> {
     String::from_utf8_lossy(&self.input[start..stop]).into_owned()
   }
 
-  /// Returns a span for the given range.
-  fn span(&self, start_offset: usize, start_line: usize, start_column: usize) -> Span {
-    Span::new(
-      start_offset..(self.position + 1),
-      start_line..self.line,
-      start_column..self.column,
+  /// Returns a location for the given range.
+  fn location(&self, start_offset: usize, start_line: usize, start_column: usize) -> Location {
+    Location::new(
+      Span::new(start_offset, self.position + 1),
+      Span::new(start_line, self.line),
+      Span::new(start_column, self.column),
     )
   }
 
-  /// Returns a token with the given kind, value, and span.
+  /// Returns a token with the given kind, value, and location.
   fn token_with_column(
     &mut self,
     kind: TokenKind,
@@ -112,12 +113,12 @@ impl<'i> Lexer<'i> {
 
     self.advance_column(&value);
 
-    let span = self.span(start, line, column);
+    let location = self.location(start, line, column);
 
-    Token::new(kind, value, span)
+    Token::new(kind, value, location)
   }
 
-  /// Returns a token with the given kind and span.
+  /// Returns a token with the given kind, offset and line.
   fn token(&mut self, kind: TokenKind, start: usize, line: usize) -> Token {
     self.token_with_column(kind, start, line, self.column)
   }
@@ -177,28 +178,25 @@ impl Lexer<'_> {
 
     self.advance_column(&value);
 
-    let span = self.span(start, self.line, column);
+    let location = self.location(start, self.line, column);
 
     self.position = self.length;
 
-    Token::invalid(value, span)
+    Token::invalid(value, location)
   }
 
   /// Returns a token that signals the end of the input stream.
   fn eof(&self) -> Token {
-    let lines = self.line..self.line;
+    let offsets = Span::new(self.position, self.position);
+    let lines = Span::new(self.line, self.line);
 
-    let span = if self.column == 1 {
-      Span::new(self.position..self.position, lines, 1..1)
+    let location = if self.column == 1 {
+      Location::new(offsets, lines, Span::new(1, 1))
     } else {
-      Span::new(
-        self.position..self.position,
-        lines,
-        self.column..self.column,
-      )
+      Location::new(offsets, lines, Span::new(self.column, self.column))
     };
 
-    Token::eof(span)
+    Token::eof(location)
   }
 
   /// Returns a token for a `;`.
@@ -469,7 +467,7 @@ impl Lexer<'_> {
 
     self.advance_column(value);
 
-    Token::new(kind, slice, self.span(start, self.line, column))
+    Token::new(kind, slice, self.location(start, self.line, column))
   }
 
   /// Returns a token for a newline.
@@ -492,12 +490,12 @@ impl Lexer<'_> {
     }
 
     let value = self.slice(start, self.position);
-    let span = self.span(start, line, column);
+    let location = self.location(start, line, column);
 
     self.column = 1;
     self.line += 1;
 
-    Token::new(TokenKind::Newline, value, span)
+    Token::new(TokenKind::Newline, value, location)
   }
 
   /// Returns a token for whitespace.
@@ -514,9 +512,9 @@ impl Lexer<'_> {
     }
 
     let value = self.slice(start, self.position);
-    let span = self.span(start, line, column);
+    let location = self.location(start, line, column);
 
-    Token::new(TokenKind::Whitespace, value, span)
+    Token::new(TokenKind::Whitespace, value, location)
   }
 }
 
@@ -526,6 +524,7 @@ mod tests {
 
   use super::TokenKind::*;
   use super::*;
+  use crate::span::Span;
 
   fn lexer(input: &str) -> Lexer {
     Lexer::new(input.as_bytes())
@@ -537,14 +536,18 @@ mod tests {
   }
 
   fn token(kind: TokenKind, value: &str, lines: Range<usize>, cols: Range<usize>) -> Token {
-    Token::new(kind, value.to_string(), Span::new(0..0, lines, cols))
+    Token::new(
+      kind,
+      value.to_string(),
+      Location::new(Span::default(), lines.into(), cols.into()),
+    )
   }
 
   fn without_offsets(token: Token) -> Token {
     Token::new(
       token.kind,
       token.value,
-      Span::new(0..0, token.span.lines, token.span.cols),
+      Location::new(Span::default(), token.location.lines, token.location.cols),
     )
   }
 
