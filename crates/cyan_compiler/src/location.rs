@@ -10,7 +10,7 @@ pub trait Located {
 }
 
 /// The location of a single node.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Location {
   /// Absolute byte offsets in the input.
   pub offsets: Span<usize>,

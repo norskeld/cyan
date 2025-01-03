@@ -321,7 +321,7 @@ impl LoweringPass {
       | ast::BinaryOp::And | ast::BinaryOp::Or => {
         Err(LoweringError::new(
           "|| and && cannot be directly lowered to TAC",
-          binary.location.clone(),
+          binary.location,
         ))
       },
     }
