@@ -187,7 +187,7 @@ impl LoweringPass {
     instructions.extend(left_instructions);
     instructions.extend([Instruction::JumpIfZero {
       condition: left,
-      target: false_label,
+      label: false_label,
     }]);
 
     // Emit instructions for right subexpression.
@@ -195,7 +195,7 @@ impl LoweringPass {
     instructions.extend([
       Instruction::JumpIfZero {
         condition: right,
-        target: false_label,
+        label: false_label,
       },
       Instruction::Copy {
         src: Value::Constant(1),
@@ -241,7 +241,7 @@ impl LoweringPass {
     instructions.extend(left_instructions);
     instructions.extend([Instruction::JumpIfNotZero {
       condition: left,
-      target: true_label,
+      label: true_label,
     }]);
 
     // Emit instructions for right subexpression.
@@ -249,7 +249,7 @@ impl LoweringPass {
     instructions.extend([
       Instruction::JumpIfNotZero {
         condition: right,
-        target: true_label,
+        label: true_label,
       },
       Instruction::Copy {
         src: Value::Constant(0),
