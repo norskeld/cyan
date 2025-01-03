@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::location::Location;
+use cyan_reporting::Location;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenKind {

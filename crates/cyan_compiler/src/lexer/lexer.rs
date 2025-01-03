@@ -1,7 +1,7 @@
+use cyan_reporting::{Location, Span};
+
 use super::ascii::*;
 use super::token::{Token, TokenKind};
-use crate::location::Location;
-use crate::span::Span;
 
 pub struct Lexer<'i> {
   /// The stream of bytes to process.
@@ -522,9 +522,10 @@ impl Lexer<'_> {
 mod tests {
   use std::ops::Range;
 
+  use cyan_reporting::Span;
+
   use super::TokenKind::*;
   use super::*;
-  use crate::span::Span;
 
   fn lexer(input: &str) -> Lexer {
     Lexer::new(input.as_bytes())

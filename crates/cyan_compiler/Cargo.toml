@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# Local dependencies.
+cyan_reporting = { path = "../cyan_reporting" }
+
+# External dependencies.
 anyhow = "1.0.94"
 internment = "0.8.6"
 thiserror = "2.0.4"

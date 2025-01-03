@@ -1,8 +1,8 @@
+use cyan_reporting::{Located, Location};
 use thiserror::Error;
 
 use crate::ir::ast;
 use crate::lexer::{Token, TokenKind};
-use crate::location::{Located, Location};
 
 type Result<T> = std::result::Result<T, ParseError>;
 
@@ -361,10 +361,11 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+  use cyan_reporting::Location;
+
   use super::*;
   use crate::ir::ast;
   use crate::lexer::Token;
-  use crate::location::Location;
 
   fn token(kind: TokenKind, value: &str) -> Token {
     Token::new(kind, value.to_string(), Location::default())
