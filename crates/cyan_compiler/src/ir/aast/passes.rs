@@ -57,7 +57,7 @@ impl LoweringPass {
           let src = self.lower_value(value);
           let dst = Operand::Reg(Reg::AX);
 
-          instructions.extend(vec![Instruction::Mov { src, dst }, Instruction::Ret]);
+          instructions.extend([Instruction::Mov { src, dst }, Instruction::Ret]);
         },
         | tac::Instruction::Unary {
           op: tac::UnaryOp::Not,
@@ -67,7 +67,7 @@ impl LoweringPass {
           let src = self.lower_value(src);
           let dst = self.lower_value(dst);
 
-          instructions.extend(vec![
+          instructions.extend([
             Instruction::Cmp {
               left: Operand::Imm(0),
               right: src,
@@ -87,7 +87,7 @@ impl LoweringPass {
           let src = self.lower_value(src);
           let dst = self.lower_value(dst);
 
-          instructions.extend(vec![
+          instructions.extend([
             Instruction::Mov { src, dst },
             Instruction::Unary { op, operand: dst },
           ]);
@@ -112,7 +112,7 @@ impl LoweringPass {
             | tac::BinaryOp::LessEqual => {
               let code = self.lower_cond_code(op)?;
 
-              instructions.extend(vec![
+              instructions.extend([
                 Instruction::Cmp { left, right },
                 Instruction::Mov {
                   src: Operand::Imm(0),
@@ -130,7 +130,7 @@ impl LoweringPass {
                 Operand::Reg(Reg::DX)
               };
 
-              instructions.extend(vec![
+              instructions.extend([
                 Instruction::Mov {
                   src: left,
                   dst: Operand::Reg(Reg::AX),
@@ -145,7 +145,7 @@ impl LoweringPass {
               let op = self.lower_binary_op(op)?;
 
               if let Operand::Imm(..) = right {
-                instructions.extend(vec![
+                instructions.extend([
                   Instruction::Mov { src: left, dst },
                   Instruction::Binary {
                     op,
@@ -154,7 +154,7 @@ impl LoweringPass {
                   },
                 ]);
               } else {
-                instructions.extend(vec![
+                instructions.extend([
                   Instruction::Mov { src: left, dst },
                   Instruction::Mov {
                     src: right,
@@ -172,7 +172,7 @@ impl LoweringPass {
             | op => {
               let op = self.lower_binary_op(op)?;
 
-              instructions.extend(vec![
+              instructions.extend([
                 Instruction::Mov { src: left, dst },
                 Instruction::Binary {
                   op,
@@ -195,7 +195,7 @@ impl LoweringPass {
         | tac::Instruction::JumpIfZero { condition, label } => {
           let right = self.lower_value(condition);
 
-          instructions.extend(vec![
+          instructions.extend([
             Instruction::Cmp {
               left: Operand::Imm(0),
               right,
@@ -209,7 +209,7 @@ impl LoweringPass {
         | tac::Instruction::JumpIfNotZero { condition, label } => {
           let right = self.lower_value(condition);
 
-          instructions.extend(vec![
+          instructions.extend([
             Instruction::Cmp {
               left: Operand::Imm(0),
               right,
