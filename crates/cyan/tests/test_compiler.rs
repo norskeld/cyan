@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -12,42 +13,45 @@ fn test_compiler() {
     ("invalid_parse", "tests/fixtures/invalid_parse", false),
   ];
 
-  suites.par_iter().for_each(|(name, suite, should_succeed)| {
-    let suite = PathBuf::from(suite);
-    let inputs = suite.read_dir().expect("should have input files");
+  suites
+    .par_iter()
+    .for_each(|(suite_name, suite_path, should_succeed)| {
+      let suite_path = PathBuf::from(suite_path);
 
-    inputs
-      .flatten()
-      .filter_map(|it| {
-        let binding = it.path();
-        let extension = &binding.extension()?;
+      let inputs = suite_path
+        .read_dir()
+        .expect("suite directory should exist")
+        .filter_map(|entry| {
+          entry.ok().and_then(|entry| {
+            let path = entry.path();
 
-        if *extension == "c" {
-          Some(binding)
-        } else {
-          None
-        }
-      })
-      .par_bridge()
-      .for_each(|input| {
-        if !input.is_file() {
-          return;
-        }
+            if path.extension().and_then(|ext| ext.to_str()) == Some("c") {
+              Some(path)
+            } else {
+              None
+            }
+          })
+        })
+        .collect::<Vec<_>>();
 
+      inputs.par_iter().for_each(|input| {
         let file = input
           .file_name()
           .expect("should have file name")
           .to_string_lossy()
           .to_string();
 
+        let binary = input.with_extension("out");
+
         // Buffer output for this file.
         let mut message = String::new();
 
-        message.push_str(&format!("{name}/{file} ... "));
+        message.push_str(&format!("{suite_name}/{file} ... "));
 
         let output = Command::new("cargo")
           .args(["run", "--quiet", "--package", "cyan", "--"])
           .args([&input.display().to_string()])
+          .args(["-o", &binary.display().to_string()])
           .output()
           .expect("should get output");
 
@@ -67,6 +71,11 @@ fn test_compiler() {
         // Print buffered output before assertion.
         print!("{message}");
 
+        // Remove generated binary.
+        if binary.is_file() {
+          fs::remove_file(&binary).expect("should remove binary");
+        }
+
         // Perform assertions.
         if *should_succeed {
           assert!(succeeded);
@@ -74,5 +83,5 @@ fn test_compiler() {
           assert!(!succeeded);
         }
       });
-  });
+    });
 }
