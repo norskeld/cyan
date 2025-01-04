@@ -1,101 +1,38 @@
 //! AST definition.
 
+use cyan_reporting::{Located, Location};
 use internment::Intern;
 
-/// A helper macro that adds a `location` field to an AST node and implements [Located] for it.
-macro_rules! located {
-  // Handle structs.
-  (
-    $(#[$outer:meta])*
-    $vis:vis struct $name:ident {
-      $(
-        $(#[$inner:meta])*
-        $field_vis:vis $field:ident : $ty:ty
-      ),* $(,)?
-    }
-  ) => {
-    $(#[$outer])*
-    $vis struct $name {
-      $(
-        $(#[$inner])*
-        $field_vis $field : $ty,
-      )*
-      /// Contains the node's location.
-      pub location: cyan_reporting::Location,
-    }
-
-    impl cyan_reporting::Located for $name {
-      fn location(&self) -> &cyan_reporting::Location {
-        &self.location
-      }
-    }
-  };
-
-  // Handle enums.
-  (
-    $(#[$outer:meta])*
-    $vis:vis enum $name:ident {
-      $(
-        $(#[$inner:meta])*
-        $variant:ident($ty:ty)
-      ),* $(,)?
-    }
-  ) => {
-    $(#[$outer])*
-    $vis enum $name {
-      $(
-        $(#[$inner])*
-        $variant($ty)
-      ),*
-    }
-
-    impl cyan_reporting::Located for $name {
-      fn location(&self) -> &cyan_reporting::Location {
-        match self {
-          $($name::$variant(expr) => expr.location(),)*
-        }
-      }
-    }
-  };
+#[derive(Debug, Located, PartialEq, Eq)]
+pub struct Program {
+  pub function: Function,
+  pub location: Location,
 }
 
-located! {
-  #[derive(Debug, PartialEq, Eq)]
-  pub struct Program {
-    pub function: Function,
-  }
+#[derive(Debug, Located, PartialEq, Eq)]
+pub struct Function {
+  pub name: Ident,
+  pub body: Statement,
+  pub location: Location,
 }
 
-located! {
-  #[derive(Debug, PartialEq, Eq)]
-  pub struct Function {
-    pub name: Ident,
-    pub body: Statement,
-  }
+#[derive(Debug, Located, PartialEq, Eq)]
+pub enum Statement {
+  Return(Expression),
 }
 
-located! {
-  #[derive(Debug, PartialEq, Eq)]
-  pub enum Statement {
-    Return(Expression),
-  }
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub enum Expression {
+  Constant(Int),
+  Unary(Unary),
+  Binary(Binary),
 }
 
-located! {
-  #[derive(Clone, Debug, PartialEq, Eq)]
-  pub enum Expression {
-    Constant(Int),
-    Unary(Unary),
-    Binary(Binary),
-  }
-}
-
-located! {
-  #[derive(Clone, Debug, PartialEq, Eq)]
-  pub struct Unary {
-    pub op: UnaryOp,
-    pub expression: Box<Expression>,
-  }
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Unary {
+  pub op: UnaryOp,
+  pub expression: Box<Expression>,
+  pub location: Location,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -108,13 +45,12 @@ pub enum UnaryOp {
   Not,
 }
 
-located! {
-  #[derive(Clone, Debug, PartialEq, Eq)]
-  pub struct Binary {
-    pub op: BinaryOp,
-    pub left: Box<Expression>,
-    pub right: Box<Expression>,
-  }
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Binary {
+  pub op: BinaryOp,
+  pub left: Box<Expression>,
+  pub right: Box<Expression>,
+  pub location: Location,
 }
 
 impl Binary {
@@ -152,16 +88,14 @@ pub enum BinaryOp {
   Or,
 }
 
-located! {
-  #[derive(Clone, Debug, PartialEq, Eq)]
-  pub struct Int {
-    pub value: isize,
-  }
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Int {
+  pub value: isize,
+  pub location: Location,
 }
 
-located! {
-  #[derive(Clone, Debug, PartialEq, Eq)]
-  pub struct Ident {
-    pub value: Intern<String>,
-  }
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Ident {
+  pub value: Intern<String>,
+  pub location: Location,
 }
