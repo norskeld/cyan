@@ -7,19 +7,20 @@ Compiler for a subset of C.
 ## Grammar
 
 ```ebnf
-<program>    ::= <function>
-<function>   ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
-<statement>  ::= "return" <expression> ";"
-<expression> ::= <factor> | <expression> <binary-op> <expression>
-<factor>     ::= <int> | <unary-op> <factor> | "(" <expression> ")"
-<unary-op>   ::= "-" | "~"
+<program>     ::= <function>
+<function>    ::= "int" <identifier> "(" "void" ")" "{" { <block-item> } "}"
+<block-item>  ::= <declaration> | <statement>
+<declaration> ::= "int" <identifier> [ "=" <expression> ] ";"
+<statement>   ::= "return" <expression> ";" | <expression> ";" | ";"
+<expression>  ::= <factor> | <expression> <binary-op> <expression>
+<factor>      ::= <int> | <identifier> | <unary-op> <factor> | "(" <expression> ")"
+<unary-op>    ::= "-" | "~" | "!"
+<binary-op>   ::= "+" | "-" | "*" | "/" | "%"
+                | "<<" | ">>" | "&" | "|" | "^"
+                | "&&" | "||" | "==" | "!=" | "<" | "<=" | ">" | ">="
 
-<binary-op>  ::= "+" | "-" | "*" | "/" | "%"
-               | "<<" | ">>" | "&" | "|" | "^"
-               | "&&" | "||" | "==" | "!=" | "<" | "<=" | ">" | ">="
-
-<identifier> ::= ? An identifier token ?
-<int>        ::= ? A constant token ?
+<identifier>  ::= ? An identifier token ?
+<int>         ::= ? A constant token ?
 ```
 
 ## Trees and IRs
@@ -38,15 +39,26 @@ This is a syntax tree representation of a C program.
 program = Program(function function)
 
 function =
-  | Function(identifier name, statement body)
+  | Function(identifier name, block_item* body)
+
+block_item =
+  | Declaration(declaration)
+  | Statement(statement)
+
+declaration =
+  | Declaration(identifier name, expression? initializer)
 
 statement =
   | Return(expression)
+  | Expression(expression)
+  | Null
 
 expression =
   | Constant(int)
+  | Var(identifier)
   | Unary(unary_op op, expression expression)
   | Binary(binary_op op, expression left, expression right)
+  | Assignment(expression lvalue, expression rvalue)
 
 unary_op =
   | BitNot

@@ -12,20 +12,37 @@ pub struct Program {
 #[derive(Debug, Located, PartialEq, Eq)]
 pub struct Function {
   pub name: Ident,
-  pub body: Statement,
+  pub body: Vec<BlockItem>,
+  pub location: Location,
+}
+
+#[derive(Debug, Located, PartialEq, Eq)]
+pub enum BlockItem {
+  Declaration(Declaration),
+  Statement(Statement),
+}
+
+#[derive(Debug, Located, PartialEq, Eq)]
+pub struct Declaration {
+  pub name: Ident,
+  pub initializer: Option<Expression>,
   pub location: Location,
 }
 
 #[derive(Debug, Located, PartialEq, Eq)]
 pub enum Statement {
   Return(Expression),
+  Expression(Expression),
+  Null { location: Location },
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
 pub enum Expression {
   Constant(Int),
+  Var(Ident),
   Unary(Unary),
   Binary(Binary),
+  Assignment(Assignment),
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
@@ -86,6 +103,13 @@ pub enum BinaryOp {
   LessEqual,
   NotEqual,
   Or,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Assignment {
+  pub left: Box<Expression>,
+  pub right: Box<Expression>,
+  pub location: Location,
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]

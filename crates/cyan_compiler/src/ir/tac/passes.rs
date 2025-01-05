@@ -60,12 +60,32 @@ impl LoweringPass {
 
     let mut instructions = Vec::new();
 
-    self.emit_statement(&function.body, &mut instructions)?;
+    for block_item in &function.body {
+      self.emit_block_item(block_item, &mut instructions)?;
+    }
 
     Ok(Function {
       name: function.name.value,
       instructions,
     })
+  }
+
+  /// Emits instructions for block item.
+  fn emit_block_item(
+    &mut self,
+    block_item: &ast::BlockItem,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<(), LoweringError> {
+    match block_item {
+      | ast::BlockItem::Declaration(declaration) => {
+        unimplemented!("declaration: {declaration:?}");
+      },
+      | ast::BlockItem::Statement(statement) => {
+        self.emit_statement(statement, instructions)?;
+      },
+    }
+
+    Ok(())
   }
 
   /// Emits instructions for statements.
@@ -81,6 +101,7 @@ impl LoweringPass {
 
         Ok(())
       },
+      | _ => unimplemented!("statement: {statement:?}"),
     }
   }
 
@@ -97,6 +118,7 @@ impl LoweringPass {
       | ast::Expression::Binary(binary) if binary.is_and() => self.emit_and(binary, instructions),
       | ast::Expression::Binary(binary) if binary.is_or() => self.emit_or(binary, instructions),
       | ast::Expression::Binary(binary) => self.emit_binary(binary, instructions),
+      | _ => unimplemented!("expression: {expression:?}"),
     }
   }
 

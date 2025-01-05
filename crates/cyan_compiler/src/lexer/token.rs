@@ -130,6 +130,11 @@ impl Token {
     Self::new(TokenKind::Eof, String::new(), location)
   }
 
+  /// Returns the same token with the given location.
+  pub fn with_location(self, location: Location) -> Self {
+    Self { location, ..self }
+  }
+
   /// Returns `true` if the token is the end of input token.
   pub fn is_eof(&self) -> bool {
     self.kind == TokenKind::Eof
@@ -140,6 +145,14 @@ impl Token {
     matches!(
       self.kind,
       TokenKind::IntKw | TokenKind::VoidKw | TokenKind::ReturnKw
+    )
+  }
+
+  /// Returns `true` if the token is a unary operator.
+  pub fn is_unary_operator(&self) -> bool {
+    matches!(
+      self.kind,
+      TokenKind::BitNot | TokenKind::Sub | TokenKind::Bang
     )
   }
 
@@ -168,6 +181,8 @@ impl Token {
         | TokenKind::LessEqual
         | TokenKind::NotEqual
         | TokenKind::Or
+        // Assignment operator.
+        | TokenKind::Assign
     )
   }
 }
