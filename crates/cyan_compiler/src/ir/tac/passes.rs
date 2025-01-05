@@ -1,6 +1,7 @@
 use cyan_reporting::Location;
 use thiserror::Error;
 
+use crate::context::Context;
 use crate::ir::ast;
 use crate::ir::tac::*;
 
@@ -25,19 +26,13 @@ impl LoweringError {
 /// Pass to transform (lower) AST to TAC.
 ///
 /// This pass lowers AST to TAC by either transforming or compacting each AST node into TAC nodes.
-pub struct LoweringPass {
-  /// The global counter for temporary variables.
-  var_counter: usize,
-  /// The prefix for temporary variables, equals to function's name.
-  var_prefix: Intern<String>,
+pub struct LoweringPass<'ctx> {
+  ctx: &'ctx mut Context,
 }
 
-impl LoweringPass {
-  pub fn new() -> Self {
-    Self {
-      var_counter: 0,
-      var_prefix: "global".to_string().into(),
-    }
+impl<'ctx> LoweringPass<'ctx> {
+  pub fn new(ctx: &'ctx mut Context) -> Self {
+    Self { ctx }
   }
 
   /// Lowers AST to TAC.
@@ -56,7 +51,7 @@ impl LoweringPass {
   fn lower_function(&mut self, function: &ast::Function) -> Result<Function, LoweringError> {
     // Set the prefix for temporary variables to current function's name so that emitted
     // instructions' temporary variables names are "scoped".
-    self.var_prefix = function.name.value;
+    self.ctx.var_prefix = function.name.value;
 
     let mut instructions = Vec::new();
 
@@ -130,7 +125,7 @@ impl LoweringPass {
   ) -> Result<Value, LoweringError> {
     let op = self.lower_unary_op(&unary.op);
     let src = self.emit_expression(&unary.expression, instructions)?;
-    let dst = Value::Var(self.gen_temporary());
+    let dst = Value::Var(self.ctx.gen_temporary());
 
     instructions.push(Instruction::Unary { op, src, dst });
 
@@ -146,7 +141,7 @@ impl LoweringPass {
     let op = self.lower_binary_op(binary)?;
     let left = self.emit_expression(&binary.left, instructions)?;
     let right = self.emit_expression(&binary.right, instructions)?;
-    let dst = Value::Var(self.gen_temporary());
+    let dst = Value::Var(self.ctx.gen_temporary());
 
     instructions.push(Instruction::Binary {
       op,
@@ -201,10 +196,10 @@ impl LoweringPass {
     let right = self.emit_expression(&binary.right, &mut right_instructions)?;
 
     // Generate jump labels.
-    let false_label = self.gen_label("and_false");
-    let end_label = self.gen_label("and_end");
+    let false_label = self.ctx.gen_label("and_false");
+    let end_label = self.ctx.gen_label("and_end");
 
-    let dst = Value::Var(self.gen_temporary());
+    let dst = Value::Var(self.ctx.gen_temporary());
 
     // Emit instructions for left subexpression.
     instructions.extend(left_instructions);
@@ -255,10 +250,10 @@ impl LoweringPass {
     let right = self.emit_expression(&binary.right, &mut right_instructions)?;
 
     // Generate jump labels.
-    let true_label = self.gen_label("or_true");
-    let end_label = self.gen_label("or_end");
+    let true_label = self.ctx.gen_label("or_true");
+    let end_label = self.ctx.gen_label("or_end");
 
-    let dst = Value::Var(self.gen_temporary());
+    let dst = Value::Var(self.ctx.gen_temporary());
 
     // Emit instructions for left subexpression.
     instructions.extend(left_instructions);
@@ -288,22 +283,6 @@ impl LoweringPass {
     ]);
 
     Ok(dst)
-  }
-
-  /// Generates a label name using `label` as a prefix and increments the counter.
-  fn gen_label(&mut self, label: &str) -> Intern<String> {
-    let label = format!("{}.{}", self.var_prefix, label);
-    self.var_counter += 1;
-
-    label.into()
-  }
-
-  /// Generates a temporary variable name scoped to the current function and increments the counter.
-  fn gen_temporary(&mut self) -> Intern<String> {
-    let name = format!("{}.{}", self.var_prefix, self.var_counter);
-    self.var_counter += 1;
-
-    name.into()
   }
 
   /// Lowers an unary operator to its TAC equivalent.

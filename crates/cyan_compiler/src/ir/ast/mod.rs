@@ -112,13 +112,13 @@ pub struct Assignment {
   pub location: Location,
 }
 
-#[derive(Clone, Debug, Located, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]
 pub struct Int {
   pub value: isize,
   pub location: Location,
 }
 
-#[derive(Clone, Debug, Located, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]
 pub struct Ident {
   pub value: Intern<String>,
   pub location: Location,
