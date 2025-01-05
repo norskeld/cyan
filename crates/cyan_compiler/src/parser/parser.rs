@@ -1,7 +1,7 @@
 use cyan_reporting::{Located, Location};
 use thiserror::Error;
 
-use crate::ir::ast;
+use crate::ir::ast::*;
 use crate::lexer::{Token, TokenKind};
 
 type Result<T> = std::result::Result<T, ParseError>;
@@ -42,7 +42,7 @@ impl Parser {
   }
 
   /// Parses the input and returns the AST.
-  pub fn parse(&mut self) -> Result<ast::Program> {
+  pub fn parse(&mut self) -> Result<Program> {
     self.program()
   }
 
@@ -128,17 +128,17 @@ impl Parser {
 
 impl Parser {
   /// Parses a whole program.
-  fn program(&mut self) -> Result<ast::Program> {
+  fn program(&mut self) -> Result<Program> {
     let init_location = Location::default();
     let function = self.function()?;
 
     let location = Location::merge(&init_location, &function.location);
 
-    Ok(ast::Program { function, location })
+    Ok(Program { function, location })
   }
 
   /// Parses a function definition.
-  fn function(&mut self) -> Result<ast::Function> {
+  fn function(&mut self) -> Result<Function> {
     let start = self.expect(TokenKind::IntKw)?;
 
     let name = self.identifier()?;
@@ -157,7 +157,7 @@ impl Parser {
     let close = self.expect(TokenKind::BraceClose)?;
     let location = Location::merge(&start.location, &close.location);
 
-    Ok(ast::Function {
+    Ok(Function {
       name,
       body,
       location,
@@ -165,17 +165,17 @@ impl Parser {
   }
 
   /// Parses a block item.
-  fn block_item(&mut self) -> Result<ast::BlockItem> {
+  fn block_item(&mut self) -> Result<BlockItem> {
     let token = self.peek();
 
     match token.kind {
-      | TokenKind::IntKw => Ok(ast::BlockItem::Declaration(self.declaration()?)),
-      | _ => Ok(ast::BlockItem::Statement(self.statement()?)),
+      | TokenKind::IntKw => Ok(BlockItem::Declaration(self.declaration()?)),
+      | _ => Ok(BlockItem::Statement(self.statement()?)),
     }
   }
 
   /// Parses a declaration.
-  fn declaration(&mut self) -> Result<ast::Declaration> {
+  fn declaration(&mut self) -> Result<Declaration> {
     let start = self.expect(TokenKind::IntKw)?;
     let name = self.identifier()?;
 
@@ -189,7 +189,7 @@ impl Parser {
         let end = self.expect(TokenKind::Semi)?;
         let location = Location::merge(&start.location, &end.location);
 
-        Ok(ast::Declaration {
+        Ok(Declaration {
           name,
           initializer: Some(right),
           location,
@@ -199,7 +199,7 @@ impl Parser {
         let end = self.expect(TokenKind::Semi)?;
         let location = Location::merge(&start.location, &end.location);
 
-        Ok(ast::Declaration {
+        Ok(Declaration {
           name,
           initializer: None,
           location,
@@ -218,7 +218,7 @@ impl Parser {
   }
 
   /// Parses a statement.
-  fn statement(&mut self) -> Result<ast::Statement> {
+  fn statement(&mut self) -> Result<Statement> {
     let token = self.peek();
 
     match token.kind {
@@ -229,36 +229,36 @@ impl Parser {
   }
 
   /// Parses a return statement.
-  fn statement_return(&mut self) -> Result<ast::Statement> {
+  fn statement_return(&mut self) -> Result<Statement> {
     self.consume()?;
 
     let expression = self.expression(0)?;
 
     self.expect(TokenKind::Semi)?;
 
-    Ok(ast::Statement::Return(expression))
+    Ok(Statement::Return(expression))
   }
 
   /// Parses an expression statement.
-  fn statement_expression(&mut self) -> Result<ast::Statement> {
+  fn statement_expression(&mut self) -> Result<Statement> {
     let expression = self.expression(0)?;
 
     self.expect(TokenKind::Semi)?;
 
-    Ok(ast::Statement::Expression(expression))
+    Ok(Statement::Expression(expression))
   }
 
   /// Parses a 'null statement', i.e. semicolon.
-  fn statement_null(&mut self) -> Result<ast::Statement> {
+  fn statement_null(&mut self) -> Result<Statement> {
     let token = self.expect(TokenKind::Semi)?;
 
-    Ok(ast::Statement::Null {
+    Ok(Statement::Null {
       location: token.location,
     })
   }
 
   /// Parses an expression.
-  fn expression(&mut self, min_precedence: usize) -> Result<ast::Expression> {
+  fn expression(&mut self, min_precedence: usize) -> Result<Expression> {
     let mut left = self.factor()?;
     let mut next = self.peek();
 
@@ -289,7 +289,7 @@ impl Parser {
             let left_location = *left.location();
             let right_location = *right.location();
 
-            left = ast::Expression::Assignment(ast::Assignment {
+            left = Expression::Assignment(Assignment {
               left: Box::new(left),
               right: Box::new(right),
               location: Location::merge(&left_location, &right_location),
@@ -303,7 +303,7 @@ impl Parser {
             let left_location = *left.location();
             let right_location = *right.location();
 
-            left = ast::Expression::Binary(ast::Binary {
+            left = Expression::Binary(Binary {
               op,
               left: Box::new(left),
               right: Box::new(right),
@@ -321,7 +321,7 @@ impl Parser {
   }
 
   /// Parses a "factor" expression, i.e. and indirection arm to allow for precedence parsing.
-  fn factor(&mut self) -> Result<ast::Expression> {
+  fn factor(&mut self) -> Result<Expression> {
     let token = self.peek();
 
     if token.is_unary_operator() {
@@ -342,14 +342,14 @@ impl Parser {
   }
 
   /// Parses a variable.
-  fn variable(&mut self) -> Result<ast::Expression> {
+  fn variable(&mut self) -> Result<Expression> {
     let ident = self.identifier()?;
 
-    Ok(ast::Expression::Var(ident))
+    Ok(Expression::Var(ident))
   }
 
   /// Parses an expression group.
-  fn group(&mut self) -> Result<ast::Expression> {
+  fn group(&mut self) -> Result<Expression> {
     self.consume()?;
 
     let expression = self.expression(0)?;
@@ -360,7 +360,7 @@ impl Parser {
   }
 
   /// Parses a constant.
-  fn constant(&mut self) -> Result<ast::Expression> {
+  fn constant(&mut self) -> Result<Expression> {
     let token = self.consume()?;
 
     let value = token.value.parse().map_err(|_| {
@@ -370,20 +370,20 @@ impl Parser {
       )
     })?;
 
-    Ok(ast::Expression::Constant(ast::Int {
+    Ok(Expression::Constant(Int {
       value,
       location: token.location,
     }))
   }
 
   /// Parses an unary expression.
-  fn unary(&mut self) -> Result<ast::Expression> {
+  fn unary(&mut self) -> Result<Expression> {
     let token = self.consume()?;
 
     let op = match token.kind {
-      | TokenKind::BitNot => ast::UnaryOp::BitNot,
-      | TokenKind::Sub => ast::UnaryOp::Negate,
-      | TokenKind::Bang => ast::UnaryOp::Not,
+      | TokenKind::BitNot => UnaryOp::BitNot,
+      | TokenKind::Sub => UnaryOp::Negate,
+      | TokenKind::Bang => UnaryOp::Not,
       | _ => {
         return Err(ParseError::new(
           format!("expected unary operator, found '{}'", token.value),
@@ -395,7 +395,7 @@ impl Parser {
     let expression = self.factor()?;
     let location = Location::merge(&token.location, expression.location());
 
-    Ok(ast::Expression::Unary(ast::Unary {
+    Ok(Expression::Unary(Unary {
       op,
       expression: Box::new(expression),
       location,
@@ -403,31 +403,31 @@ impl Parser {
   }
 
   /// Parses a binary operator.
-  fn binary(&mut self) -> Result<ast::BinaryOp> {
+  fn binary(&mut self) -> Result<BinaryOp> {
     let token = self.consume()?;
 
     let op = match token.kind {
       // Arithmetic operators.
-      | TokenKind::Add => ast::BinaryOp::Add,
-      | TokenKind::Div => ast::BinaryOp::Div,
-      | TokenKind::Mod => ast::BinaryOp::Mod,
-      | TokenKind::Mul => ast::BinaryOp::Mul,
-      | TokenKind::Sub => ast::BinaryOp::Sub,
+      | TokenKind::Add => BinaryOp::Add,
+      | TokenKind::Div => BinaryOp::Div,
+      | TokenKind::Mod => BinaryOp::Mod,
+      | TokenKind::Mul => BinaryOp::Mul,
+      | TokenKind::Sub => BinaryOp::Sub,
       // Bitwise operators.
-      | TokenKind::BitAnd => ast::BinaryOp::BitAnd,
-      | TokenKind::BitOr => ast::BinaryOp::BitOr,
-      | TokenKind::BitShl => ast::BinaryOp::BitShl,
-      | TokenKind::BitShr => ast::BinaryOp::BitShr,
-      | TokenKind::BitXor => ast::BinaryOp::BitXor,
+      | TokenKind::BitAnd => BinaryOp::BitAnd,
+      | TokenKind::BitOr => BinaryOp::BitOr,
+      | TokenKind::BitShl => BinaryOp::BitShl,
+      | TokenKind::BitShr => BinaryOp::BitShr,
+      | TokenKind::BitXor => BinaryOp::BitXor,
       // Logical operators.
-      | TokenKind::And => ast::BinaryOp::And,
-      | TokenKind::Equal => ast::BinaryOp::Equal,
-      | TokenKind::Greater => ast::BinaryOp::Greater,
-      | TokenKind::GreaterEqual => ast::BinaryOp::GreaterEqual,
-      | TokenKind::Less => ast::BinaryOp::Less,
-      | TokenKind::LessEqual => ast::BinaryOp::LessEqual,
-      | TokenKind::NotEqual => ast::BinaryOp::NotEqual,
-      | TokenKind::Or => ast::BinaryOp::Or,
+      | TokenKind::And => BinaryOp::And,
+      | TokenKind::Equal => BinaryOp::Equal,
+      | TokenKind::Greater => BinaryOp::Greater,
+      | TokenKind::GreaterEqual => BinaryOp::GreaterEqual,
+      | TokenKind::Less => BinaryOp::Less,
+      | TokenKind::LessEqual => BinaryOp::LessEqual,
+      | TokenKind::NotEqual => BinaryOp::NotEqual,
+      | TokenKind::Or => BinaryOp::Or,
       // Otherwise we got an unexpected token or an unary operator.
       | _ => {
         return Err(ParseError::new(
@@ -441,7 +441,7 @@ impl Parser {
   }
 
   /// Parses an identifier.
-  fn identifier(&mut self) -> Result<ast::Ident> {
+  fn identifier(&mut self) -> Result<Ident> {
     let token = self.consume()?;
 
     if token.kind != TokenKind::Ident {
@@ -451,7 +451,7 @@ impl Parser {
       ));
     }
 
-    Ok(ast::Ident {
+    Ok(Ident {
       value: token.value.into(),
       location: token.location,
     })
@@ -487,7 +487,6 @@ mod tests {
   use indoc::indoc;
 
   use super::*;
-  use crate::ir::ast;
   use crate::lexer::Lexer;
 
   /// Creates a new parser from the given input.
@@ -514,86 +513,82 @@ mod tests {
     "})
     .parse();
 
-    let expected = ast::Program {
-      function: ast::Function {
-        name: ast::Ident {
+    let expected = Program {
+      function: Function {
+        name: Ident {
           value: "main".to_string().into(),
           location: Location::default(),
         },
         body: vec![
-          ast::BlockItem::Declaration(ast::Declaration {
-            name: ast::Ident {
+          BlockItem::Declaration(Declaration {
+            name: Ident {
               value: "a".to_string().into(),
               location: Location::default(),
             },
-            initializer: Some(ast::Expression::Constant(ast::Int {
+            initializer: Some(Expression::Constant(Int {
               value: 21,
               location: Location::default(),
             })),
             location: Location::default(),
           }),
-          ast::BlockItem::Declaration(ast::Declaration {
-            name: ast::Ident {
+          BlockItem::Declaration(Declaration {
+            name: Ident {
               value: "b".to_string().into(),
               location: Location::default(),
             },
-            initializer: Some(ast::Expression::Constant(ast::Int {
+            initializer: Some(Expression::Constant(Int {
               value: 42,
               location: Location::default(),
             })),
             location: Location::default(),
           }),
-          ast::BlockItem::Declaration(ast::Declaration {
-            name: ast::Ident {
+          BlockItem::Declaration(Declaration {
+            name: Ident {
               value: "c".to_string().into(),
               location: Location::default(),
             },
             initializer: None,
             location: Location::default(),
           }),
-          ast::BlockItem::Statement(ast::Statement::Expression(ast::Expression::Assignment(
-            ast::Assignment {
-              left: Box::new(ast::Expression::Var(ast::Ident {
+          BlockItem::Statement(Statement::Expression(Expression::Assignment(Assignment {
+            left: Box::new(Expression::Var(Ident {
+              value: "b".to_string().into(),
+              location: Location::default(),
+            })),
+            right: Box::new(Expression::Binary(Binary {
+              op: BinaryOp::Div,
+              left: Box::new(Expression::Var(Ident {
                 value: "b".to_string().into(),
                 location: Location::default(),
               })),
-              right: Box::new(ast::Expression::Binary(ast::Binary {
-                op: ast::BinaryOp::Div,
-                left: Box::new(ast::Expression::Var(ast::Ident {
-                  value: "b".to_string().into(),
-                  location: Location::default(),
-                })),
-                right: Box::new(ast::Expression::Constant(ast::Int {
-                  value: 2,
-                  location: Location::default(),
-                })),
+              right: Box::new(Expression::Constant(Int {
+                value: 2,
                 location: Location::default(),
               })),
               location: Location::default(),
-            },
-          ))),
-          ast::BlockItem::Statement(ast::Statement::Expression(ast::Expression::Assignment(
-            ast::Assignment {
-              left: Box::new(ast::Expression::Var(ast::Ident {
-                value: "c".to_string().into(),
+            })),
+            location: Location::default(),
+          }))),
+          BlockItem::Statement(Statement::Expression(Expression::Assignment(Assignment {
+            left: Box::new(Expression::Var(Ident {
+              value: "c".to_string().into(),
+              location: Location::default(),
+            })),
+            right: Box::new(Expression::Binary(Binary {
+              op: BinaryOp::Add,
+              left: Box::new(Expression::Var(Ident {
+                value: "a".to_string().into(),
                 location: Location::default(),
               })),
-              right: Box::new(ast::Expression::Binary(ast::Binary {
-                op: ast::BinaryOp::Add,
-                left: Box::new(ast::Expression::Var(ast::Ident {
-                  value: "a".to_string().into(),
-                  location: Location::default(),
-                })),
-                right: Box::new(ast::Expression::Var(ast::Ident {
-                  value: "b".to_string().into(),
-                  location: Location::default(),
-                })),
+              right: Box::new(Expression::Var(Ident {
+                value: "b".to_string().into(),
                 location: Location::default(),
               })),
               location: Location::default(),
-            },
-          ))),
-          ast::BlockItem::Statement(ast::Statement::Return(ast::Expression::Var(ast::Ident {
+            })),
+            location: Location::default(),
+          }))),
+          BlockItem::Statement(Statement::Return(Expression::Var(Ident {
             value: "c".to_string().into(),
             location: Location::default(),
           }))),
@@ -610,12 +605,12 @@ mod tests {
   fn parse_declaration_with_initializer() {
     let actual = parser("int meaning = 42;").declaration();
 
-    let expected = ast::Declaration {
-      name: ast::Ident {
+    let expected = Declaration {
+      name: Ident {
         value: "meaning".to_string().into(),
         location: Location::default(),
       },
-      initializer: Some(ast::Expression::Constant(ast::Int {
+      initializer: Some(Expression::Constant(Int {
         value: 42,
         location: Location::default(),
       })),
@@ -629,8 +624,8 @@ mod tests {
   fn parse_declaration_without_initializer() {
     let actual = parser("int meaning;").declaration();
 
-    let expected = ast::Declaration {
-      name: ast::Ident {
+    let expected = Declaration {
+      name: Ident {
         value: "meaning".to_string().into(),
         location: Location::default(),
       },
@@ -645,22 +640,22 @@ mod tests {
   fn parse_declaration_with_multiple_assignments() {
     let actual = parser("int a = b = c = 42;").block_item();
 
-    let expected = ast::BlockItem::Declaration(ast::Declaration {
-      name: ast::Ident {
+    let expected = BlockItem::Declaration(Declaration {
+      name: Ident {
         value: "a".to_string().into(),
         location: Location::default(),
       },
-      initializer: Some(ast::Expression::Assignment(ast::Assignment {
-        left: Box::new(ast::Expression::Var(ast::Ident {
+      initializer: Some(Expression::Assignment(Assignment {
+        left: Box::new(Expression::Var(Ident {
           value: "b".to_string().into(),
           location: Location::default(),
         })),
-        right: Box::new(ast::Expression::Assignment(ast::Assignment {
-          left: Box::new(ast::Expression::Var(ast::Ident {
+        right: Box::new(Expression::Assignment(Assignment {
+          left: Box::new(Expression::Var(Ident {
             value: "c".to_string().into(),
             location: Location::default(),
           })),
-          right: Box::new(ast::Expression::Constant(ast::Int {
+          right: Box::new(Expression::Constant(Int {
             value: 42,
             location: Location::default(),
           })),
@@ -678,19 +673,46 @@ mod tests {
   fn parse_assignment_statement() {
     let actual = parser("meaning = 42;").block_item();
 
-    let expected = ast::BlockItem::Statement(ast::Statement::Expression(
-      ast::Expression::Assignment(ast::Assignment {
-        left: Box::new(ast::Expression::Var(ast::Ident {
+    let expected =
+      BlockItem::Statement(Statement::Expression(Expression::Assignment(Assignment {
+        left: Box::new(Expression::Var(Ident {
           value: "meaning".to_string().into(),
           location: Location::default(),
         })),
-        right: Box::new(ast::Expression::Constant(ast::Int {
+        right: Box::new(Expression::Constant(Int {
           value: 42,
           location: Location::default(),
         })),
         location: Location::default(),
-      }),
-    ));
+      })));
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_assignment_statement_to_constant() {
+    let actual = parser("2 = a * 42;").block_item();
+
+    let expected =
+      BlockItem::Statement(Statement::Expression(Expression::Assignment(Assignment {
+        left: Box::new(Expression::Constant(Int {
+          value: 2,
+          location: Location::default(),
+        })),
+        right: Box::new(Expression::Binary(Binary {
+          op: BinaryOp::Mul,
+          left: Box::new(Expression::Var(Ident {
+            value: "a".to_string().into(),
+            location: Location::default(),
+          })),
+          right: Box::new(Expression::Constant(Int {
+            value: 42,
+            location: Location::default(),
+          })),
+          location: Location::default(),
+        })),
+        location: Location::default(),
+      })));
 
     assert_eq!(actual, Ok(expected));
   }
@@ -699,7 +721,7 @@ mod tests {
   fn parse_return_statement() {
     let actual = parser("return 42;").statement();
 
-    let expected = ast::Statement::Return(ast::Expression::Constant(ast::Int {
+    let expected = Statement::Return(Expression::Constant(Int {
       value: 42,
       location: Location::default(),
     }));
@@ -711,7 +733,7 @@ mod tests {
   fn parse_constant() {
     let actual = parser("42").constant();
 
-    let expected = ast::Expression::Constant(ast::Int {
+    let expected = Expression::Constant(Int {
       value: 42,
       location: Location::default(),
     });
@@ -723,9 +745,9 @@ mod tests {
   fn parse_unary() {
     let actual = parser("-42").unary();
 
-    let expected = ast::Expression::Unary(ast::Unary {
-      op: ast::UnaryOp::Negate,
-      expression: Box::new(ast::Expression::Constant(ast::Int {
+    let expected = Expression::Unary(Unary {
+      op: UnaryOp::Negate,
+      expression: Box::new(Expression::Constant(Int {
         value: 42,
         location: Location::default(),
       })),
@@ -739,13 +761,13 @@ mod tests {
   fn parse_unary_nested() {
     let actual = parser("-(~(-42))").expression(0);
 
-    let expected = ast::Expression::Unary(ast::Unary {
-      op: ast::UnaryOp::Negate,
-      expression: Box::new(ast::Expression::Unary(ast::Unary {
-        op: ast::UnaryOp::BitNot,
-        expression: Box::new(ast::Expression::Unary(ast::Unary {
-          op: ast::UnaryOp::Negate,
-          expression: Box::new(ast::Expression::Constant(ast::Int {
+    let expected = Expression::Unary(Unary {
+      op: UnaryOp::Negate,
+      expression: Box::new(Expression::Unary(Unary {
+        op: UnaryOp::BitNot,
+        expression: Box::new(Expression::Unary(Unary {
+          op: UnaryOp::Negate,
+          expression: Box::new(Expression::Constant(Int {
             value: 42,
             location: Location::default(),
           })),
@@ -763,9 +785,9 @@ mod tests {
   fn parse_unary_not() {
     let actual = parser("!42;").statement();
 
-    let expected = ast::Statement::Expression(ast::Expression::Unary(ast::Unary {
-      op: ast::UnaryOp::Not,
-      expression: Box::new(ast::Expression::Constant(ast::Int {
+    let expected = Statement::Expression(Expression::Unary(Unary {
+      op: UnaryOp::Not,
+      expression: Box::new(Expression::Constant(Int {
         value: 42,
         location: Location::default(),
       })),
@@ -779,13 +801,13 @@ mod tests {
   fn parse_binary() {
     let actual = parser("1 * 2").expression(0);
 
-    let expected = ast::Expression::Binary(ast::Binary {
-      op: ast::BinaryOp::Mul,
-      left: Box::new(ast::Expression::Constant(ast::Int {
+    let expected = Expression::Binary(Binary {
+      op: BinaryOp::Mul,
+      left: Box::new(Expression::Constant(Int {
         value: 1,
         location: Location::default(),
       })),
-      right: Box::new(ast::Expression::Constant(ast::Int {
+      right: Box::new(Expression::Constant(Int {
         value: 2,
         location: Location::default(),
       })),
@@ -813,33 +835,33 @@ mod tests {
 
     let actual = parser("1 * 2 - 3 * (4 + 5)").expression(0);
 
-    let expected = ast::Expression::Binary(ast::Binary {
-      op: ast::BinaryOp::Sub,
-      left: Box::new(ast::Expression::Binary(ast::Binary {
-        op: ast::BinaryOp::Mul,
-        left: Box::new(ast::Expression::Constant(ast::Int {
+    let expected = Expression::Binary(Binary {
+      op: BinaryOp::Sub,
+      left: Box::new(Expression::Binary(Binary {
+        op: BinaryOp::Mul,
+        left: Box::new(Expression::Constant(Int {
           value: 1,
           location: Location::default(),
         })),
-        right: Box::new(ast::Expression::Constant(ast::Int {
+        right: Box::new(Expression::Constant(Int {
           value: 2,
           location: Location::default(),
         })),
         location: Location::default(),
       })),
-      right: Box::new(ast::Expression::Binary(ast::Binary {
-        op: ast::BinaryOp::Mul,
-        left: Box::new(ast::Expression::Constant(ast::Int {
+      right: Box::new(Expression::Binary(Binary {
+        op: BinaryOp::Mul,
+        left: Box::new(Expression::Constant(Int {
           value: 3,
           location: Location::default(),
         })),
-        right: Box::new(ast::Expression::Binary(ast::Binary {
-          op: ast::BinaryOp::Add,
-          left: Box::new(ast::Expression::Constant(ast::Int {
+        right: Box::new(Expression::Binary(Binary {
+          op: BinaryOp::Add,
+          left: Box::new(Expression::Constant(Int {
             value: 4,
             location: Location::default(),
           })),
-          right: Box::new(ast::Expression::Constant(ast::Int {
+          right: Box::new(Expression::Constant(Int {
             value: 5,
             location: Location::default(),
           })),
@@ -857,8 +879,8 @@ mod tests {
   fn parse_empty_main() {
     let actual = parser("int main(void) {}").function();
 
-    let expected = ast::Function {
-      name: ast::Ident {
+    let expected = Function {
+      name: Ident {
         value: "main".to_string().into(),
         location: Location::default(),
       },
