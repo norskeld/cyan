@@ -43,12 +43,7 @@ impl Parser {
 
   /// Parses the input and returns the AST.
   pub fn parse(&mut self) -> Result<ast::Program> {
-    let init_location = Location::default();
-    let function = self.function()?;
-
-    let location = Location::merge(&init_location, &function.location);
-
-    Ok(ast::Program { function, location })
+    self.program()
   }
 
   /// Returns the next token, skipping whitespace and comments.
@@ -132,6 +127,16 @@ impl Parser {
 }
 
 impl Parser {
+  /// Parses a whole program.
+  fn program(&mut self) -> Result<ast::Program> {
+    let init_location = Location::default();
+    let function = self.function()?;
+
+    let location = Location::merge(&init_location, &function.location);
+
+    Ok(ast::Program { function, location })
+  }
+
   /// Parses a function definition.
   fn function(&mut self) -> Result<ast::Function> {
     let start = self.expect(TokenKind::IntKw)?;
@@ -143,7 +148,12 @@ impl Parser {
     self.expect(TokenKind::ParenClose)?;
     self.expect(TokenKind::BraceOpen)?;
 
-    let body = self.statement()?;
+    let mut body = Vec::new();
+
+    while self.peek().kind != TokenKind::BraceClose {
+      body.push(self.block_item()?);
+    }
+
     let close = self.expect(TokenKind::BraceClose)?;
     let location = Location::merge(&start.location, &close.location);
 
@@ -154,23 +164,72 @@ impl Parser {
     })
   }
 
-  /// Parses a statement.
-  fn statement(&mut self) -> Result<ast::Statement> {
+  /// Parses a block item.
+  fn block_item(&mut self) -> Result<ast::BlockItem> {
     let token = self.peek();
 
     match token.kind {
-      | TokenKind::ReturnKw => self.return_statement(),
+      | TokenKind::IntKw => Ok(ast::BlockItem::Declaration(self.declaration()?)),
+      | _ => Ok(ast::BlockItem::Statement(self.statement()?)),
+    }
+  }
+
+  /// Parses a declaration.
+  fn declaration(&mut self) -> Result<ast::Declaration> {
+    let start = self.expect(TokenKind::IntKw)?;
+    let name = self.identifier()?;
+
+    let next = self.peek();
+
+    match next.kind {
+      | TokenKind::Assign => {
+        self.consume()?;
+
+        let right = self.expression(0)?;
+        let end = self.expect(TokenKind::Semi)?;
+        let location = Location::merge(&start.location, &end.location);
+
+        Ok(ast::Declaration {
+          name,
+          initializer: Some(right),
+          location,
+        })
+      },
+      | TokenKind::Semi => {
+        let end = self.expect(TokenKind::Semi)?;
+        let location = Location::merge(&start.location, &end.location);
+
+        Ok(ast::Declaration {
+          name,
+          initializer: None,
+          location,
+        })
+      },
       | _ => {
         Err(ParseError::new(
-          format!("expected statement, found '{}'", token.value),
-          token.location,
+          format!(
+            "expected ';' or '=' after declaration, found '{}'",
+            next.value
+          ),
+          next.location,
         ))
       },
     }
   }
 
+  /// Parses a statement.
+  fn statement(&mut self) -> Result<ast::Statement> {
+    let token = self.peek();
+
+    match token.kind {
+      | TokenKind::ReturnKw => self.statement_return(),
+      | TokenKind::Semi => self.statement_null(),
+      | _ => self.statement_expression(),
+    }
+  }
+
   /// Parses a return statement.
-  fn return_statement(&mut self) -> Result<ast::Statement> {
+  fn statement_return(&mut self) -> Result<ast::Statement> {
     self.consume()?;
 
     let expression = self.expression(0)?;
@@ -178,6 +237,24 @@ impl Parser {
     self.expect(TokenKind::Semi)?;
 
     Ok(ast::Statement::Return(expression))
+  }
+
+  /// Parses an expression statement.
+  fn statement_expression(&mut self) -> Result<ast::Statement> {
+    let expression = self.expression(0)?;
+
+    self.expect(TokenKind::Semi)?;
+
+    Ok(ast::Statement::Expression(expression))
+  }
+
+  /// Parses a 'null statement', i.e. semicolon.
+  fn statement_null(&mut self) -> Result<ast::Statement> {
+    let token = self.expect(TokenKind::Semi)?;
+
+    Ok(ast::Statement::Null {
+      location: token.location,
+    })
   }
 
   /// Parses an expression.
@@ -188,18 +265,51 @@ impl Parser {
     while next.is_binary_operator() {
       match Self::precedence(next) {
         | Some(precedence) if precedence >= min_precedence => {
-          let op = self.binary()?;
-          let right = self.expression(precedence + 1)?;
+          // Handle assignment differently, because unlike other binary operators it is
+          // right-associative, i.e. we need to parse the following:
+          //
+          // a = b = c = d
+          //
+          // as:
+          //
+          // a = (b = (c = d))
+          //
+          // instead of:
+          //
+          // ((a = b) = c) = d
+          //
+          // This is not ideal, because if we ever need other right-associative operators, e.g.
+          // other assignment operations like += or *=, we'll need to slightly alter this logic. But
+          // for now, it's fine.
+          if next.kind == TokenKind::Assign {
+            self.consume()?;
 
-          let left_location = *left.location();
-          let right_location = *right.location();
+            let right = self.expression(precedence)?;
 
-          left = ast::Expression::Binary(ast::Binary {
-            op,
-            left: Box::new(left),
-            right: Box::new(right),
-            location: Location::merge(&left_location, &right_location),
-          });
+            let left_location = *left.location();
+            let right_location = *right.location();
+
+            left = ast::Expression::Assignment(ast::Assignment {
+              left: Box::new(left),
+              right: Box::new(right),
+              location: Location::merge(&left_location, &right_location),
+            });
+          }
+          // Otherwise, we just parse the (left-associative) binary operators.
+          else {
+            let op = self.binary()?;
+            let right = self.expression(precedence + 1)?;
+
+            let left_location = *left.location();
+            let right_location = *right.location();
+
+            left = ast::Expression::Binary(ast::Binary {
+              op,
+              left: Box::new(left),
+              right: Box::new(right),
+              location: Location::merge(&left_location, &right_location),
+            });
+          }
 
           next = self.peek();
         },
@@ -214,17 +324,28 @@ impl Parser {
   fn factor(&mut self) -> Result<ast::Expression> {
     let token = self.peek();
 
+    if token.is_unary_operator() {
+      return self.unary();
+    }
+
     match token.kind {
       | TokenKind::Int => self.constant(),
+      | TokenKind::Ident => self.variable(),
       | TokenKind::ParenOpen => self.group(),
-      | TokenKind::BitNot | TokenKind::Sub | TokenKind::Bang => self.unary(),
       | _ => {
         Err(ParseError::new(
-          format!("expected expression, found '{}'", token.value),
+          format!("expected a factor, found '{}'", token.value),
           token.location,
         ))
       },
     }
+  }
+
+  /// Parses a variable.
+  fn variable(&mut self) -> Result<ast::Expression> {
+    let ident = self.identifier()?;
+
+    Ok(ast::Expression::Var(ident))
   }
 
   /// Parses an expression group.
@@ -354,6 +475,7 @@ impl Parser {
       | TokenKind::BitOr => Some(15),
       | TokenKind::And => Some(10),
       | TokenKind::Or => Some(5),
+      | TokenKind::Assign => Some(1),
       | _ => None,
     }
   }
@@ -362,37 +484,35 @@ impl Parser {
 #[cfg(test)]
 mod tests {
   use cyan_reporting::Location;
+  use indoc::indoc;
 
   use super::*;
   use crate::ir::ast;
-  use crate::lexer::Token;
+  use crate::lexer::Lexer;
 
-  fn token(kind: TokenKind, value: &str) -> Token {
-    Token::new(kind, value.to_string(), Location::default())
-  }
+  /// Creates a new parser from the given input.
+  fn parser(input: impl AsRef<str> + Into<String>) -> Parser {
+    let mut lexer = Lexer::new(input.as_ref().trim().as_bytes());
+    let tokens = lexer.lex_locationless();
 
-  /// Tries to parse the whole program from the given tokens.
-  fn parse(tokens: Vec<Token>) -> Result<ast::Program> {
-    let mut parser = Parser::new(tokens);
-    parser.parse()
+    Parser::new(tokens)
   }
 
   #[test]
   fn parse_program() {
-    let mut parser = Parser::new(vec![
-      token(TokenKind::IntKw, "int"),
-      token(TokenKind::Ident, "main"),
-      token(TokenKind::ParenOpen, "("),
-      token(TokenKind::VoidKw, "void"),
-      token(TokenKind::ParenClose, ")"),
-      token(TokenKind::BraceOpen, "{"),
-      token(TokenKind::ReturnKw, "return"),
-      token(TokenKind::Int, "42"),
-      token(TokenKind::Semi, ";"),
-      token(TokenKind::BraceClose, "}"),
-    ]);
+    let actual = parser(indoc! {"
+      int main(void) {
+        int a = 21;
+        int b = 42;
+        int c;
 
-    let actual = parser.parse();
+        b = b / 2;
+        c = a + b;
+
+        return c;
+      }
+    "})
+    .parse();
 
     let expected = ast::Program {
       function: ast::Function {
@@ -400,10 +520,84 @@ mod tests {
           value: "main".to_string().into(),
           location: Location::default(),
         },
-        body: ast::Statement::Return(ast::Expression::Constant(ast::Int {
-          value: 42,
-          location: Location::default(),
-        })),
+        body: vec![
+          ast::BlockItem::Declaration(ast::Declaration {
+            name: ast::Ident {
+              value: "a".to_string().into(),
+              location: Location::default(),
+            },
+            initializer: Some(ast::Expression::Constant(ast::Int {
+              value: 21,
+              location: Location::default(),
+            })),
+            location: Location::default(),
+          }),
+          ast::BlockItem::Declaration(ast::Declaration {
+            name: ast::Ident {
+              value: "b".to_string().into(),
+              location: Location::default(),
+            },
+            initializer: Some(ast::Expression::Constant(ast::Int {
+              value: 42,
+              location: Location::default(),
+            })),
+            location: Location::default(),
+          }),
+          ast::BlockItem::Declaration(ast::Declaration {
+            name: ast::Ident {
+              value: "c".to_string().into(),
+              location: Location::default(),
+            },
+            initializer: None,
+            location: Location::default(),
+          }),
+          ast::BlockItem::Statement(ast::Statement::Expression(ast::Expression::Assignment(
+            ast::Assignment {
+              left: Box::new(ast::Expression::Var(ast::Ident {
+                value: "b".to_string().into(),
+                location: Location::default(),
+              })),
+              right: Box::new(ast::Expression::Binary(ast::Binary {
+                op: ast::BinaryOp::Div,
+                left: Box::new(ast::Expression::Var(ast::Ident {
+                  value: "b".to_string().into(),
+                  location: Location::default(),
+                })),
+                right: Box::new(ast::Expression::Constant(ast::Int {
+                  value: 2,
+                  location: Location::default(),
+                })),
+                location: Location::default(),
+              })),
+              location: Location::default(),
+            },
+          ))),
+          ast::BlockItem::Statement(ast::Statement::Expression(ast::Expression::Assignment(
+            ast::Assignment {
+              left: Box::new(ast::Expression::Var(ast::Ident {
+                value: "c".to_string().into(),
+                location: Location::default(),
+              })),
+              right: Box::new(ast::Expression::Binary(ast::Binary {
+                op: ast::BinaryOp::Add,
+                left: Box::new(ast::Expression::Var(ast::Ident {
+                  value: "a".to_string().into(),
+                  location: Location::default(),
+                })),
+                right: Box::new(ast::Expression::Var(ast::Ident {
+                  value: "b".to_string().into(),
+                  location: Location::default(),
+                })),
+                location: Location::default(),
+              })),
+              location: Location::default(),
+            },
+          ))),
+          ast::BlockItem::Statement(ast::Statement::Return(ast::Expression::Var(ast::Ident {
+            value: "c".to_string().into(),
+            location: Location::default(),
+          }))),
+        ],
         location: Location::default(),
       },
       location: Location::default(),
@@ -413,14 +607,97 @@ mod tests {
   }
 
   #[test]
-  fn parse_statement() {
-    let mut parser = Parser::new(vec![
-      token(TokenKind::ReturnKw, "return"),
-      token(TokenKind::Int, "42"),
-      token(TokenKind::Semi, ";"),
-    ]);
+  fn parse_declaration_with_initializer() {
+    let actual = parser("int meaning = 42;").declaration();
 
-    let actual = parser.statement();
+    let expected = ast::Declaration {
+      name: ast::Ident {
+        value: "meaning".to_string().into(),
+        location: Location::default(),
+      },
+      initializer: Some(ast::Expression::Constant(ast::Int {
+        value: 42,
+        location: Location::default(),
+      })),
+      location: Location::default(),
+    };
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_declaration_without_initializer() {
+    let actual = parser("int meaning;").declaration();
+
+    let expected = ast::Declaration {
+      name: ast::Ident {
+        value: "meaning".to_string().into(),
+        location: Location::default(),
+      },
+      initializer: None,
+      location: Location::default(),
+    };
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_declaration_with_multiple_assignments() {
+    let actual = parser("int a = b = c = 42;").block_item();
+
+    let expected = ast::BlockItem::Declaration(ast::Declaration {
+      name: ast::Ident {
+        value: "a".to_string().into(),
+        location: Location::default(),
+      },
+      initializer: Some(ast::Expression::Assignment(ast::Assignment {
+        left: Box::new(ast::Expression::Var(ast::Ident {
+          value: "b".to_string().into(),
+          location: Location::default(),
+        })),
+        right: Box::new(ast::Expression::Assignment(ast::Assignment {
+          left: Box::new(ast::Expression::Var(ast::Ident {
+            value: "c".to_string().into(),
+            location: Location::default(),
+          })),
+          right: Box::new(ast::Expression::Constant(ast::Int {
+            value: 42,
+            location: Location::default(),
+          })),
+          location: Location::default(),
+        })),
+        location: Location::default(),
+      })),
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_assignment_statement() {
+    let actual = parser("meaning = 42;").block_item();
+
+    let expected = ast::BlockItem::Statement(ast::Statement::Expression(
+      ast::Expression::Assignment(ast::Assignment {
+        left: Box::new(ast::Expression::Var(ast::Ident {
+          value: "meaning".to_string().into(),
+          location: Location::default(),
+        })),
+        right: Box::new(ast::Expression::Constant(ast::Int {
+          value: 42,
+          location: Location::default(),
+        })),
+        location: Location::default(),
+      }),
+    ));
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_return_statement() {
+    let actual = parser("return 42;").statement();
 
     let expected = ast::Statement::Return(ast::Expression::Constant(ast::Int {
       value: 42,
@@ -432,9 +709,7 @@ mod tests {
 
   #[test]
   fn parse_constant() {
-    let mut parser = Parser::new(vec![token(TokenKind::Int, "42")]);
-
-    let actual = parser.constant();
+    let actual = parser("42").constant();
 
     let expected = ast::Expression::Constant(ast::Int {
       value: 42,
@@ -446,12 +721,7 @@ mod tests {
 
   #[test]
   fn parse_unary() {
-    let mut parser = Parser::new(vec![
-      token(TokenKind::Sub, "-"),
-      token(TokenKind::Int, "42"),
-    ]);
-
-    let actual = parser.unary();
+    let actual = parser("-42").unary();
 
     let expected = ast::Expression::Unary(ast::Unary {
       op: ast::UnaryOp::Negate,
@@ -467,25 +737,18 @@ mod tests {
 
   #[test]
   fn parse_unary_nested() {
-    // -(~(-42))
-    let mut parser = Parser::new(vec![
-      token(TokenKind::Sub, "-"),
-      token(TokenKind::ParenOpen, "("),
-      token(TokenKind::BitNot, "~"),
-      token(TokenKind::ParenOpen, "("),
-      token(TokenKind::Int, "-42"),
-      token(TokenKind::ParenClose, ")"),
-      token(TokenKind::ParenClose, ")"),
-    ]);
-
-    let actual = parser.expression(0);
+    let actual = parser("-(~(-42))").expression(0);
 
     let expected = ast::Expression::Unary(ast::Unary {
       op: ast::UnaryOp::Negate,
       expression: Box::new(ast::Expression::Unary(ast::Unary {
         op: ast::UnaryOp::BitNot,
-        expression: Box::new(ast::Expression::Constant(ast::Int {
-          value: -42,
+        expression: Box::new(ast::Expression::Unary(ast::Unary {
+          op: ast::UnaryOp::Negate,
+          expression: Box::new(ast::Expression::Constant(ast::Int {
+            value: 42,
+            location: Location::default(),
+          })),
           location: Location::default(),
         })),
         location: Location::default(),
@@ -498,16 +761,9 @@ mod tests {
 
   #[test]
   fn parse_unary_not() {
-    let mut parser = Parser::new(vec![
-      token(TokenKind::ReturnKw, "return"),
-      token(TokenKind::Bang, "!"),
-      token(TokenKind::Int, "42"),
-      token(TokenKind::Semi, ";"),
-    ]);
+    let actual = parser("!42;").statement();
 
-    let actual = parser.statement();
-
-    let expected = ast::Statement::Return(ast::Expression::Unary(ast::Unary {
+    let expected = ast::Statement::Expression(ast::Expression::Unary(ast::Unary {
       op: ast::UnaryOp::Not,
       expression: Box::new(ast::Expression::Constant(ast::Int {
         value: 42,
@@ -521,13 +777,7 @@ mod tests {
 
   #[test]
   fn parse_binary() {
-    let mut parser = Parser::new(vec![
-      token(TokenKind::Int, "1"),
-      token(TokenKind::Mul, "*"),
-      token(TokenKind::Int, "2"),
-    ]);
-
-    let actual = parser.expression(0);
+    let actual = parser("1 * 2").expression(0);
 
     let expected = ast::Expression::Binary(ast::Binary {
       op: ast::BinaryOp::Mul,
@@ -560,21 +810,8 @@ mod tests {
     //          / \
     //         4   5
     // ```
-    let mut parser = Parser::new(vec![
-      token(TokenKind::Int, "1"),
-      token(TokenKind::Mul, "*"),
-      token(TokenKind::Int, "2"),
-      token(TokenKind::Sub, "-"),
-      token(TokenKind::Int, "3"),
-      token(TokenKind::Mul, "*"),
-      token(TokenKind::ParenOpen, "("),
-      token(TokenKind::Int, "4"),
-      token(TokenKind::Add, "+"),
-      token(TokenKind::Int, "5"),
-      token(TokenKind::ParenClose, ")"),
-    ]);
 
-    let actual = parser.expression(0);
+    let actual = parser("1 * 2 - 3 * (4 + 5)").expression(0);
 
     let expected = ast::Expression::Binary(ast::Binary {
       op: ast::BinaryOp::Sub,
@@ -617,61 +854,66 @@ mod tests {
   }
 
   #[test]
-  fn parse_empty_program() {
-    let result = parse(vec![]);
+  fn parse_empty_main() {
+    let actual = parser("int main(void) {}").function();
 
-    assert!(result.is_err());
+    let expected = ast::Function {
+      name: ast::Ident {
+        value: "main".to_string().into(),
+        location: Location::default(),
+      },
+      body: vec![],
+      location: Location::default(),
+    };
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_empty_program() {
+    let actual = parser("").parse();
+
+    assert!(actual.is_err());
 
     assert_eq!(
-      result.unwrap_err().message,
+      actual.unwrap_err().message,
       "the end of the input is reached, but more is expected"
     );
   }
 
   #[test]
   fn parse_function_definition_missing_brace() {
-    let result = parse(vec![
-      token(TokenKind::IntKw, "int"),
-      token(TokenKind::Ident, "main"),
-      token(TokenKind::ParenOpen, "("),
-      token(TokenKind::VoidKw, "void"),
-      token(TokenKind::ParenClose, ")"),
-      // Missing opening brace
-      token(TokenKind::ReturnKw, "return"),
-      token(TokenKind::Int, "5"),
-      token(TokenKind::Semi, ";"),
-      token(TokenKind::BraceClose, "}"),
-    ]);
+    let actual = parser(indoc! {"
+      int main(void)
+        return 5;
+      }
+    "})
+    .parse();
 
-    assert!(result.is_err());
+    assert!(actual.is_err());
 
     assert_eq!(
-      result.unwrap_err().message,
+      actual.unwrap_err().message,
       "expected a '{', found 'return' instead"
     );
   }
 
   #[test]
   fn parse_invalid_token() {
-    let result = parse(vec![token(TokenKind::Invalid, "@")]);
+    let actual = parser("@").parse();
 
-    assert!(result.is_err());
-
-    assert_eq!(result.unwrap_err().message, "a '@' is not allowed");
+    assert!(actual.is_err());
+    assert_eq!(actual.unwrap_err().message, "a '@' is not allowed");
   }
 
   #[test]
   fn parse_unexpected_end_of_input() {
-    let result = parse(vec![
-      token(TokenKind::IntKw, "int"),
-      token(TokenKind::Ident, "main"),
-      token(TokenKind::ParenOpen, "("),
-    ]);
+    let actual = parser("int main(").parse();
 
-    assert!(result.is_err());
+    assert!(actual.is_err());
 
     assert_eq!(
-      result.unwrap_err().message,
+      actual.unwrap_err().message,
       "the end of the input is reached, but more is expected"
     );
   }

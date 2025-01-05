@@ -48,6 +48,27 @@ impl<'i> Lexer<'i> {
     tokens
   }
 
+  /// Lexes the input and returns a vector of tokens, but all tokens have their `location` set to
+  /// `Location::default()`. Needed for testing.
+  #[cfg(test)]
+  pub fn lex_locationless(&mut self) -> Vec<Token> {
+    let location = Location::default();
+    let mut tokens = Vec::new();
+
+    loop {
+      let token = self.next().with_location(location);
+      let kind = token.kind;
+
+      tokens.push(token);
+
+      if kind == TokenKind::Eof {
+        break;
+      }
+    }
+
+    tokens
+  }
+
   /// Returns `true` if there is another byte to process.
   #[inline]
   fn has_next(&self) -> bool {
