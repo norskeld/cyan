@@ -4,9 +4,11 @@ use std::fmt;
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{self, Command};
 
 use clap::{Parser, ValueEnum};
+use cyan_compiler::analysis;
+use cyan_compiler::context;
 use cyan_compiler::emitter;
 use cyan_compiler::ir::aast;
 use cyan_compiler::ir::tac;
@@ -32,6 +34,7 @@ macro_rules! bail_on {
 enum CompileStage {
   Lex,
   Parse,
+  Verify,
   Tac,
   Codegen,
   Emit,
@@ -43,6 +46,7 @@ impl fmt::Display for CompileStage {
     let stage = match self {
       | CompileStage::Lex => "Lex",
       | CompileStage::Parse => "Parse",
+      | CompileStage::Verify => "Verify",
       | CompileStage::Tac => "TAC",
       | CompileStage::Codegen => "Codegen",
       | CompileStage::Emit => "Emit",
@@ -129,7 +133,9 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
 
   let contents = fs::read_to_string(&preprocessed)?;
 
-  // Lex.
+  // -----------------------------------------------------------------------------------------------
+  // Lex:
+
   let mut lexer = lexer::Lexer::new(contents.as_bytes());
   let tokens = lexer.lex();
 
@@ -146,32 +152,50 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
 
   bail_on!(options, CompileStage::Lex);
 
-  // Parse.
+  // -----------------------------------------------------------------------------------------------
+  // Parse:
+
   let mut parser = parser::Parser::new(tokens);
-  let program = parser.parse()?;
+  let ast = parser.parse()?;
 
   if options.should_print(CompileStage::Parse) {
     println!("{}", boxed("Stage | Parse (AST)"));
-    println!("{program:#?}");
+    println!("{ast:#?}");
     println!();
   }
 
   bail_on!(options, CompileStage::Parse);
 
-  // TAC.
-  let mut lowerer = tac::LoweringPass::new();
-  let tac = lowerer.lower(&program)?;
+  // -----------------------------------------------------------------------------------------------
+  // Verify:
+
+  let mut ctx = context::Context::new();
+
+  let mut pass = analysis::VarResolutionPass::new(&mut ctx);
+  let ast = pass.run(&ast)?;
+
+  if options.should_print(CompileStage::Verify) {
+    println!("{}", boxed("Stage | Variable resolution (AST)"));
+    println!("{ast:#?}\n");
+  }
+
+  bail_on!(options, CompileStage::Verify);
+
+  // -----------------------------------------------------------------------------------------------
+  // TAC:
+
+  let mut lowerer = tac::LoweringPass::new(&mut ctx);
+  let tac = lowerer.lower(&ast)?;
 
   if options.should_print(CompileStage::Tac) {
     println!("{}", boxed("Stage | Three Address Code (TAC)"));
-    println!("{tac:#?}");
-    println!();
+    println!("{tac:#?}\n");
   }
 
   bail_on!(options, CompileStage::Tac);
 
   // -----------------------------------------------------------------------------------------------
-  // Codegen.
+  // Codegen:
 
   // Lower TAC to AAST.
   let lowerer = aast::LoweringPass::new();
@@ -188,11 +212,13 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   if options.should_print(CompileStage::Codegen) {
     println!("{}", boxed("Stage | Codegen (AAST)"));
     println!("stack_size = {stack_size}");
-    println!("{aast:#?}");
-    println!();
+    println!("{aast:#?}\n");
   }
 
   bail_on!(options, CompileStage::Codegen);
+
+  // -----------------------------------------------------------------------------------------------
+  // Emission:
 
   // Emit assembly.
   let emitter = emitter::Emitter::new();
@@ -200,8 +226,7 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
 
   if options.should_print(CompileStage::Codegen) {
     println!("{}", boxed("Stage | Emission (Assembly)"));
-    println!("{}", &emitted.to_string());
-    println!();
+    println!("{}\n", &emitted.to_string());
   }
 
   bail_on!(options, CompileStage::Emit);
@@ -213,8 +238,7 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   // Link.
   if options.should_print(CompileStage::Link) {
     println!("{}", boxed("Stage | Link"));
-    println!("<unimplemented>");
-    println!();
+    println!("<unimplemented>\n");
   }
 
   bail_on!(options, CompileStage::Link);
@@ -334,7 +358,7 @@ fn execute(options: &CompileOptions) -> anyhow::Result<()> {
 }
 
 /// Compiler driver.
-fn main() -> anyhow::Result<()> {
+fn driver() -> anyhow::Result<()> {
   let cli = Cli::parse();
 
   // Get paths.
@@ -350,4 +374,11 @@ fn main() -> anyhow::Result<()> {
   };
 
   execute(&options)
+}
+
+fn main() {
+  if let Err(err) = driver() {
+    eprintln!("{err}");
+    process::exit(1);
+  }
 }
