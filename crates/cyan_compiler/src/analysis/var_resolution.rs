@@ -10,7 +10,7 @@ use crate::ir::ast::*;
 pub type Result<T> = std::result::Result<T, VarResolutionError>;
 
 /// A mapping from the user-defined variable names to the unique names to be used later.
-pub type VarMap = HashMap<Intern<String>, String>;
+pub type VarMap = HashMap<Intern<String>, Intern<String>>;
 
 #[derive(Debug, Error)]
 #[error("variable resolution error {location}: {message}")]
@@ -97,7 +97,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
     if let Entry::Vacant(entry) = variables.entry(declaration.name.value) {
       // Generate unique name and associate a user-defined name with it.
       let unique_name = self.ctx.gen_label(&declaration.name.value);
-      entry.insert(unique_name.to_string());
+      entry.insert(unique_name);
 
       // Resolve initializer if there is one.
       let resolved_init = declaration
@@ -153,7 +153,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
       | Expression::Var(ident) => {
         if let Some(name) = variables.get(&ident.value) {
           Ok(Expression::Var(Ident {
-            value: name.clone().into(),
+            value: *name,
             location: ident.location,
           }))
         } else {
