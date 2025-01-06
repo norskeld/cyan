@@ -1,4 +1,4 @@
-use cyan_reporting::Location;
+use cyan_reporting::{Located, Location};
 use thiserror::Error;
 
 use crate::context::Context;
@@ -59,6 +59,9 @@ impl<'ctx> LoweringPass<'ctx> {
       self.emit_block_item(block_item, &mut instructions)?;
     }
 
+    // Shove a return instruction at the end of the function.
+    instructions.push(Instruction::Return(Value::Constant(0)));
+
     Ok(Function {
       name: function.name.value,
       instructions,
@@ -73,11 +76,35 @@ impl<'ctx> LoweringPass<'ctx> {
   ) -> Result<(), LoweringError> {
     match block_item {
       | ast::BlockItem::Declaration(declaration) => {
-        unimplemented!("declaration: {declaration:?}");
+        self.emit_declaration(declaration, instructions)
       },
-      | ast::BlockItem::Statement(statement) => {
-        self.emit_statement(statement, instructions)?;
-      },
+      | ast::BlockItem::Statement(statement) => self.emit_statement(statement, instructions),
+    }
+  }
+
+  /// Emits instructions for declarations.
+  fn emit_declaration(
+    &mut self,
+    ast::Declaration {
+      name,
+      initializer,
+      location,
+    }: &ast::Declaration,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<(), LoweringError> {
+    // Treating declaration with initializer like an assignment expression. This is suboptimal, but
+    // will do for now.
+    if let Some(right) = initializer {
+      let left = Box::new(ast::Expression::Var(*name));
+      let right = Box::new(right.clone());
+
+      let expression = ast::Expression::Assignment(ast::Assignment {
+        left,
+        right,
+        location: *location,
+      });
+
+      self.emit_expression(&expression, instructions)?;
     }
 
     Ok(())
@@ -96,7 +123,12 @@ impl<'ctx> LoweringPass<'ctx> {
 
         Ok(())
       },
-      | _ => unimplemented!("statement: {statement:?}"),
+      | ast::Statement::Expression(expression) => {
+        self.emit_expression(expression, instructions)?;
+
+        Ok(())
+      },
+      | ast::Statement::Null { .. } => Ok(()),
     }
   }
 
@@ -109,11 +141,12 @@ impl<'ctx> LoweringPass<'ctx> {
     // `Value`s are Copy, so we don't need to `clone` them, they'll be copied.
     match expression {
       | ast::Expression::Constant(int) => Ok(Value::Constant(int.value)),
+      | ast::Expression::Var(ident) => Ok(Value::Var(ident.value)),
       | ast::Expression::Unary(unary) => self.emit_unary(unary, instructions),
       | ast::Expression::Binary(binary) if binary.is_and() => self.emit_and(binary, instructions),
       | ast::Expression::Binary(binary) if binary.is_or() => self.emit_or(binary, instructions),
       | ast::Expression::Binary(binary) => self.emit_binary(binary, instructions),
-      | _ => unimplemented!("expression: {expression:?}"),
+      | ast::Expression::Assignment(assignment) => self.emit_assignment(assignment, instructions),
     }
   }
 
@@ -151,6 +184,30 @@ impl<'ctx> LoweringPass<'ctx> {
     });
 
     Ok(dst)
+  }
+
+  /// Emits instructions for assignment.
+  fn emit_assignment(
+    &mut self,
+    assignment: &ast::Assignment,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<Value, LoweringError> {
+    match *assignment.left {
+      | ast::Expression::Var(ident) => {
+        let src = self.emit_expression(&assignment.right, instructions)?;
+        let dst = Value::Var(ident.value);
+
+        instructions.push(Instruction::Copy { src, dst });
+
+        Ok(dst)
+      },
+      | _ => {
+        Err(LoweringError::new(
+          "invalid lvalue",
+          *assignment.left.location(),
+        ))
+      },
+    }
   }
 
   /// Emits instructions for the `&&` operator.
