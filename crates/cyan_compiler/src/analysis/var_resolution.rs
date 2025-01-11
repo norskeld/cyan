@@ -200,6 +200,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
           ))
         }
       },
+      | _ => todo!("resolve expression"),
     }
   }
 }
