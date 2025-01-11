@@ -164,6 +164,13 @@ impl<'ctx> VarResolutionPass<'ctx> {
         }
       },
       | Expression::Unary(unary) => {
+        if let UnaryOp::Dec | UnaryOp::Inc = unary.op {
+          return Err(VarResolutionError::new(
+            "operand of ++/-- must be a variable",
+            unary.location,
+          ));
+        }
+
         let expression = self.resolve_expression(&unary.expression, variables)?;
 
         Ok(Expression::Unary(Unary {
@@ -195,12 +202,45 @@ impl<'ctx> VarResolutionPass<'ctx> {
           }))
         } else {
           Err(VarResolutionError::new(
-            "expression must be a modifiable lvalue",
+            "left-hand expression of assignment must be a modifiable lvalue",
             *assignment.left.location(),
           ))
         }
       },
-      | _ => todo!("resolve expression"),
+      | Expression::CompoundAssignment(assignment) => {
+        if let Expression::Var(..) = &*assignment.left {
+          let left = self.resolve_expression(&assignment.left, variables)?;
+          let right = self.resolve_expression(&assignment.right, variables)?;
+
+          Ok(Expression::CompoundAssignment(CompoundAssignment {
+            op: assignment.op,
+            left: Box::new(left),
+            right: Box::new(right),
+            location: assignment.location,
+          }))
+        } else {
+          Err(VarResolutionError::new(
+            "left-hand expression of compound assignment must be a modifiable lvalue",
+            *assignment.left.location(),
+          ))
+        }
+      },
+      | Expression::Postfix(postfix) => {
+        if let Expression::Var(..) = &*postfix.operand {
+          let operand = self.resolve_expression(&postfix.operand, variables)?;
+
+          Ok(Expression::Postfix(Postfix {
+            op: postfix.op,
+            operand: Box::new(operand),
+            location: postfix.location,
+          }))
+        } else {
+          Err(VarResolutionError::new(
+            "operand of postfix expression must be a modifiable lvalue",
+            *postfix.operand.location(),
+          ))
+        }
+      },
     }
   }
 }
