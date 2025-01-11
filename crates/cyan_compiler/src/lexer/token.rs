@@ -10,12 +10,16 @@ pub enum TokenKind {
   VoidKw,
   // Arithmetic operators.
   Add,
-  Dec,
   Div,
-  Inc,
   Mod,
   Mul,
   Sub,
+  // Arithmetic operators (compound).
+  AddAssign,
+  DivAssign,
+  ModAssign,
+  MulAssign,
+  SubAssign,
   // Bitwise operators.
   BitAnd,
   BitNot,
@@ -23,6 +27,12 @@ pub enum TokenKind {
   BitShl,
   BitShr,
   BitXor,
+  // Bitwise operators (compound).
+  BitAndAssign,
+  BitOrAssign,
+  BitShlAssign,
+  BitShrAssign,
+  BitXorAssign,
   // Logical operators.
   And,
   Equal,
@@ -35,6 +45,8 @@ pub enum TokenKind {
   // Other operators.
   Assign,
   Bang,
+  Dec,
+  Inc,
   // Punctuation.
   BraceClose,
   BraceOpen,
@@ -52,53 +64,139 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+  /// Returns `true` if the token kind is the end of input token.
+  pub fn is_eof(&self) -> bool {
+    matches!(self, Self::Eof)
+  }
+
+  /// Returns `true` if the token kind is a keyword.
+  pub fn is_keyword(&self) -> bool {
+    matches!(self, Self::IntKw | Self::VoidKw | Self::ReturnKw)
+  }
+
+  /// Returns `true` if the token kind is a postfix operator.
+  pub fn is_postfix_op(&self) -> bool {
+    matches!(self, Self::Inc | Self::Dec)
+  }
+
+  /// Returns `true` if the token kind is a unary operator.
+  pub fn is_unary_op(&self) -> bool {
+    matches!(
+      self,
+      Self::BitNot | Self::Sub | Self::Bang | Self::Dec | Self::Inc
+    )
+  }
+
+  /// Returns `true` if the token kind is a binary operator.
+  pub fn is_binary_op(&self) -> bool {
+    match self {
+      // Arithmetic operators.
+      | Self::Add
+      | Self::Sub
+      | Self::Mul
+      | Self::Div
+      | Self::Mod
+      // Bitwise operators.
+      | Self::BitAnd
+      | Self::BitOr
+      | Self::BitShl
+      | Self::BitShr
+      | Self::BitXor
+      // Logical operators.
+      | Self::And
+      | Self::Equal
+      | Self::Greater
+      | Self::GreaterEqual
+      | Self::Less
+      | Self::LessEqual
+      | Self::NotEqual
+      | Self::Or => true,
+      // Assignment operators.
+      | op if op.is_assignment_op() => true,
+      | _ => false,
+    }
+  }
+
+  pub fn is_assignment_op(&self) -> bool {
+    match self {
+      // Assignment operator.
+      | Self::Assign
+      // Arithmetic operators (compound).
+      | Self::AddAssign
+      | Self::SubAssign
+      | Self::MulAssign
+      | Self::DivAssign
+      | Self::ModAssign
+      // Bitwise operators (compound).
+      | Self::BitAndAssign
+      | Self::BitOrAssign
+      | Self::BitShlAssign
+      | Self::BitShrAssign
+      | Self::BitXorAssign => true,
+      | _ => false,
+    }
+  }
+
+  /// Returns token kind description.
   pub fn description(&self) -> &str {
     match self {
       // Keywords.
-      | TokenKind::IntKw => "the 'int' keyword",
-      | TokenKind::ReturnKw => "the 'return' keyword",
-      | TokenKind::VoidKw => "the 'void' keyword",
+      | Self::IntKw => "the 'int' keyword",
+      | Self::ReturnKw => "the 'return' keyword",
+      | Self::VoidKw => "the 'void' keyword",
       // Arithmetic operators.
-      | TokenKind::Add => "a '+'",
-      | TokenKind::Dec => "a '--'",
-      | TokenKind::Div => "a '/'",
-      | TokenKind::Inc => "a '++'",
-      | TokenKind::Mod => "a '%'",
-      | TokenKind::Mul => "a '*'",
-      | TokenKind::Sub => "a '-'",
+      | Self::Add => "a '+'",
+      | Self::Div => "a '/'",
+      | Self::Mod => "a '%'",
+      | Self::Mul => "a '*'",
+      | Self::Sub => "a '-'",
+      // Arithmetic operators (compound).
+      | Self::AddAssign => "a '+='",
+      | Self::DivAssign => "a '/='",
+      | Self::ModAssign => "a '%='",
+      | Self::MulAssign => "a '*='",
+      | Self::SubAssign => "a '-='",
       // Bitwise operators.
-      | TokenKind::BitAnd => "a '&'",
-      | TokenKind::BitNot => "a '~'",
-      | TokenKind::BitOr => "a '|'",
-      | TokenKind::BitShl => "a '<<'",
-      | TokenKind::BitShr => "a '>>'",
-      | TokenKind::BitXor => "a '^'",
+      | Self::BitAnd => "a '&'",
+      | Self::BitNot => "a '~'",
+      | Self::BitOr => "a '|'",
+      | Self::BitShl => "a '<<'",
+      | Self::BitShr => "a '>>'",
+      | Self::BitXor => "a '^'",
+      // Bitwise operators (compound).
+      | Self::BitAndAssign => "a '&='",
+      | Self::BitOrAssign => "a '|='",
+      | Self::BitShlAssign => "a '<<='",
+      | Self::BitShrAssign => "a '>>='",
+      | Self::BitXorAssign => "a '^='",
       // Logical operators.
-      | TokenKind::And => "a '&&'",
-      | TokenKind::Equal => "a '=='",
-      | TokenKind::Greater => "a '>'",
-      | TokenKind::GreaterEqual => "a '>='",
-      | TokenKind::Less => "a '<'",
-      | TokenKind::LessEqual => "a '<='",
-      | TokenKind::NotEqual => "a '!='",
-      | TokenKind::Or => "a '||'",
+      | Self::And => "a '&&'",
+      | Self::Equal => "a '=='",
+      | Self::Greater => "a '>'",
+      | Self::GreaterEqual => "a '>='",
+      | Self::Less => "a '<'",
+      | Self::LessEqual => "a '<='",
+      | Self::NotEqual => "a '!='",
+      | Self::Or => "a '||'",
       // Other operators.
-      | TokenKind::Bang => "a '!'",
-      | TokenKind::Assign => "a '='",
+      | Self::Assign => "a '='",
+      | Self::Bang => "a '!'",
+      | Self::Dec => "a '--'",
+      | Self::Inc => "a '++'",
       // Punctuation.
-      | TokenKind::BraceClose => "a '}'",
-      | TokenKind::BraceOpen => "a '{'",
-      | TokenKind::ParenClose => "a ')'",
-      | TokenKind::ParenOpen => "a '('",
-      | TokenKind::Semi => "a ';'",
+      | Self::BraceClose => "a '}'",
+      | Self::BraceOpen => "a '{'",
+      | Self::ParenClose => "a ')'",
+      | Self::ParenOpen => "a '('",
+      | Self::Semi => "a ';'",
       // Non-terminals.
-      | TokenKind::Int => "an integer",
-      | TokenKind::Ident => "an identifier",
-      | TokenKind::Newline => "a newline",
-      | TokenKind::Whitespace => "whitespace",
+      | Self::Int => "an integer",
+      | Self::Ident => "an identifier",
+      | Self::Newline => "a newline",
+      | Self::Whitespace => "whitespace",
       // Other.
-      | TokenKind::Eof => "the end of input",
-      | TokenKind::Invalid => "an invalid token",
+      | Self::Eof => "the end of input",
+      | Self::Invalid => "an invalid token",
     }
   }
 }
@@ -137,53 +235,32 @@ impl Token {
 
   /// Returns `true` if the token is the end of input token.
   pub fn is_eof(&self) -> bool {
-    self.kind == TokenKind::Eof
+    self.kind.is_eof()
   }
 
   /// Returns `true` if the token is a keyword.
   pub fn is_keyword(&self) -> bool {
-    matches!(
-      self.kind,
-      TokenKind::IntKw | TokenKind::VoidKw | TokenKind::ReturnKw
-    )
+    self.kind.is_keyword()
+  }
+
+  /// Returns `true` if the token is a postfix operator.
+  pub fn is_postfix_op(&self) -> bool {
+    self.kind.is_postfix_op()
   }
 
   /// Returns `true` if the token is a unary operator.
-  pub fn is_unary_operator(&self) -> bool {
-    matches!(
-      self.kind,
-      TokenKind::BitNot | TokenKind::Sub | TokenKind::Bang
-    )
+  pub fn is_unary_op(&self) -> bool {
+    self.kind.is_unary_op()
   }
 
   /// Returns `true` if the token is a binary operator.
-  pub fn is_binary_operator(&self) -> bool {
-    matches!(
-      self.kind,
-      // Arithmetic operators.
-      TokenKind::Add
-        | TokenKind::Sub
-        | TokenKind::Mul
-        | TokenKind::Div
-        | TokenKind::Mod
-        // Bitwise operators.
-        | TokenKind::BitAnd
-        | TokenKind::BitOr
-        | TokenKind::BitShl
-        | TokenKind::BitShr
-        | TokenKind::BitXor
-        // Logical operators.
-        | TokenKind::And
-        | TokenKind::Equal
-        | TokenKind::Greater
-        | TokenKind::GreaterEqual
-        | TokenKind::Less
-        | TokenKind::LessEqual
-        | TokenKind::NotEqual
-        | TokenKind::Or
-        // Assignment operator.
-        | TokenKind::Assign
-    )
+  pub fn is_binary_op(&self) -> bool {
+    self.kind.is_binary_op()
+  }
+
+  /// Returns `true` if the token is an assignment operator.
+  pub fn is_assignment_op(&self) -> bool {
+    self.kind.is_assignment_op()
   }
 }
 

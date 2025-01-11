@@ -147,6 +147,7 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::Expression::Binary(binary) if binary.is_or() => self.emit_or(binary, instructions),
       | ast::Expression::Binary(binary) => self.emit_binary(binary, instructions),
       | ast::Expression::Assignment(assignment) => self.emit_assignment(assignment, instructions),
+      | _ => todo!("emit expression"),
     }
   }
 
@@ -351,6 +352,7 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::UnaryOp::BitNot => UnaryOp::BitNot,
       // Logical operators.
       | ast::UnaryOp::Not => UnaryOp::Not,
+      | _ => todo!("lower unary op"),
     }
   }
 

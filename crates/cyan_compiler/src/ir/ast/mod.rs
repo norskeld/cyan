@@ -43,6 +43,8 @@ pub enum Expression {
   Unary(Unary),
   Binary(Binary),
   Assignment(Assignment),
+  CompoundAssignment(CompoundAssignment),
+  Postfix(Postfix),
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
@@ -55,6 +57,8 @@ pub struct Unary {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnaryOp {
   // Arithmetic operators.
+  Dec,
+  Inc,
   Negate,
   // Bitwise operators.
   BitNot,
@@ -110,6 +114,27 @@ pub struct Assignment {
   pub left: Box<Expression>,
   pub right: Box<Expression>,
   pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct CompoundAssignment {
+  pub op: BinaryOp,
+  pub left: Box<Expression>,
+  pub right: Box<Expression>,
+  pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Postfix {
+  pub op: PostfixOp,
+  pub operand: Box<Expression>,
+  pub location: Location,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PostfixOp {
+  Inc,
+  Dec,
 }
 
 #[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]

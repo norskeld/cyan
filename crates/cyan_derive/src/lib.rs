@@ -27,7 +27,7 @@ fn handle_struct(name: Ident, data_struct: DataStruct) -> TokenStream {
     field
       .ident
       .as_ref()
-      .map_or(false, |ident| ident == "location")
+      .is_some_and(|ident| ident == "location")
   });
 
   if has_location_field {
@@ -62,7 +62,7 @@ fn handle_enum(name: Ident, data_enum: DataEnum) -> TokenStream {
           field
             .ident
             .as_ref()
-            .map_or(false, |ident| ident == "location")
+            .is_some_and(|ident| ident == "location")
         });
 
         if has_location_field {

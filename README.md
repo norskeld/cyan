@@ -13,11 +13,15 @@ Compiler for a subset of C.
 <declaration> ::= "int" <identifier> [ "=" <expression> ] ";"
 <statement>   ::= "return" <expression> ";" | <expression> ";" | ";"
 <expression>  ::= <factor> | <expression> <binary-op> <expression>
-<factor>      ::= <int> | <identifier> | <unary-op> <factor> | "(" <expression> ")"
-<unary-op>    ::= "-" | "~" | "!"
+<factor>      ::= <unary-op> <factor> | <postfix>
+<postfix>     ::= <primary> { <postfix-op> }
+<primary>     ::= <int> | <identifier> | "(" <expression> ")"
+<unary-op>    ::= "-" | "~" | "!" | "++" | "--"
+<postfix-op>  ::= "++" | "--"
 <binary-op>   ::= "+" | "-" | "*" | "/" | "%"
                 | "<<" | ">>" | "&" | "|" | "^"
                 | "&&" | "||" | "==" | "!=" | "<" | "<=" | ">" | ">="
+                | "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
 
 <identifier>  ::= ? An identifier token ?
 <int>         ::= ? A constant token ?
@@ -58,12 +62,16 @@ expression =
   | Var(identifier)
   | Unary(unary_op op, expression expression)
   | Binary(binary_op op, expression left, expression right)
+  | Postfix(postfix_op op, expression operand)
   | Assignment(expression lvalue, expression rvalue)
+  | CompoundAssignment(binary_op op, expression lvalue, expression rvalue)
 
 unary_op =
   | BitNot
   | Negate
   | Not
+  | Inc
+  | Dec
 
 binary_op =
   | Add
@@ -84,6 +92,21 @@ binary_op =
   | LessEqual
   | NotEqual
   | Or
+  | Assign
+  | AddAssign
+  | SubAssign
+  | MulAssign
+  | DivAssign
+  | ModAssign
+  | BitAndAssign
+  | BitOrAssign
+  | BitXorAssign
+  | BitShlAssign
+  | BitShrAssign
+
+postfix_op =
+  | Dec
+  | Inc
 ```
 </details>
 

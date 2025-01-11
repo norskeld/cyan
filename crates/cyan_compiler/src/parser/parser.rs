@@ -262,10 +262,10 @@ impl Parser {
     let mut left = self.factor()?;
     let mut next = self.peek();
 
-    while next.is_binary_operator() {
+    while next.is_binary_op() {
       match Self::precedence(next) {
         | Some(precedence) if precedence >= min_precedence => {
-          // Handle assignment differently, because unlike other binary operators it is
+          // Handle assignments differently, because unlike other binary operators they are
           // right-associative, i.e. we need to parse the following:
           //
           // a = b = c = d
@@ -277,37 +277,41 @@ impl Parser {
           // instead of:
           //
           // ((a = b) = c) = d
-          //
-          // This is not ideal, because if we ever need other right-associative operators, e.g.
-          // other assignment operations like += or *=, we'll need to slightly alter this logic. But
-          // for now, it's fine.
-          if next.kind == TokenKind::Assign {
-            self.consume()?;
-
+          if next.is_assignment_op() {
+            let token = self.consume()?;
             let right = self.expression(precedence)?;
+            let operator = Self::resolve_compound_op(&token)?;
+            let location = Location::merge(left.location(), right.location());
 
-            let left_location = *left.location();
-            let right_location = *right.location();
-
-            left = Expression::Assignment(Assignment {
-              left: Box::new(left),
-              right: Box::new(right),
-              location: Location::merge(&left_location, &right_location),
-            });
+            left = match operator {
+              | Some(op) => {
+                Expression::CompoundAssignment(CompoundAssignment {
+                  op,
+                  left: Box::new(left),
+                  right: Box::new(right),
+                  location,
+                })
+              },
+              | None => {
+                Expression::Assignment(Assignment {
+                  left: Box::new(left),
+                  right: Box::new(right),
+                  location,
+                })
+              },
+            }
           }
           // Otherwise, we just parse the (left-associative) binary operators.
           else {
             let op = self.binary()?;
             let right = self.expression(precedence + 1)?;
-
-            let left_location = *left.location();
-            let right_location = *right.location();
+            let location = Location::merge(left.location(), right.location());
 
             left = Expression::Binary(Binary {
               op,
               left: Box::new(left),
               right: Box::new(right),
-              location: Location::merge(&left_location, &right_location),
+              location,
             });
           }
 
@@ -320,13 +324,38 @@ impl Parser {
     Ok(left)
   }
 
-  /// Parses a "factor" expression, i.e. and indirection arm to allow for precedence parsing.
+  /// Parses a factor expression.
   fn factor(&mut self) -> Result<Expression> {
-    let token = self.peek();
-
-    if token.is_unary_operator() {
-      return self.unary();
+    if self.peek().is_unary_op() {
+      self.unary()
+    } else {
+      self.postfix()
     }
+  }
+
+  /// Parses a postfix expression.
+  fn postfix(&mut self) -> Result<Expression> {
+    let mut primary = self.primary()?;
+
+    while self.peek().is_postfix_op() {
+      let token = self.consume()?;
+
+      let op = Self::resolve_postfix_op(&token)?;
+      let location = Location::merge(primary.location(), &token.location);
+
+      primary = Expression::Postfix(Postfix {
+        op,
+        operand: Box::new(primary),
+        location,
+      })
+    }
+
+    Ok(primary)
+  }
+
+  /// Parses a primary expression.
+  fn primary(&mut self) -> Result<Expression> {
+    let token = self.peek();
 
     match token.kind {
       | TokenKind::Int => self.constant(),
@@ -334,7 +363,7 @@ impl Parser {
       | TokenKind::ParenOpen => self.group(),
       | _ => {
         Err(ParseError::new(
-          format!("expected a factor, found '{}'", token.value),
+          format!("expected a primary expression, found '{}'", token.value),
           token.location,
         ))
       },
@@ -382,8 +411,10 @@ impl Parser {
 
     let op = match token.kind {
       | TokenKind::BitNot => UnaryOp::BitNot,
-      | TokenKind::Sub => UnaryOp::Negate,
       | TokenKind::Bang => UnaryOp::Not,
+      | TokenKind::Dec => UnaryOp::Dec,
+      | TokenKind::Inc => UnaryOp::Inc,
+      | TokenKind::Sub => UnaryOp::Negate,
       | _ => {
         return Err(ParseError::new(
           format!("expected unary operator, found '{}'", token.value),
@@ -475,8 +506,50 @@ impl Parser {
       | TokenKind::BitOr => Some(15),
       | TokenKind::And => Some(10),
       | TokenKind::Or => Some(5),
-      | TokenKind::Assign => Some(1),
+      | kind if kind.is_assignment_op() => Some(1),
       | _ => None,
+    }
+  }
+
+  /// Returns the matching binary operator for the given compound assignment token.
+  fn resolve_compound_op(token: &Token) -> Result<Option<BinaryOp>> {
+    match token.kind {
+      // Assignment operator.
+      | TokenKind::Assign => Ok(None),
+      // Arithmetic operators.
+      | TokenKind::AddAssign => Ok(Some(BinaryOp::Add)),
+      | TokenKind::SubAssign => Ok(Some(BinaryOp::Sub)),
+      | TokenKind::MulAssign => Ok(Some(BinaryOp::Mul)),
+      | TokenKind::DivAssign => Ok(Some(BinaryOp::Div)),
+      | TokenKind::ModAssign => Ok(Some(BinaryOp::Mod)),
+      // Bitwise operators.
+      | TokenKind::BitAndAssign => Ok(Some(BinaryOp::BitAnd)),
+      | TokenKind::BitOrAssign => Ok(Some(BinaryOp::BitOr)),
+      | TokenKind::BitShlAssign => Ok(Some(BinaryOp::BitShl)),
+      | TokenKind::BitShrAssign => Ok(Some(BinaryOp::BitShr)),
+      | TokenKind::BitXorAssign => Ok(Some(BinaryOp::BitXor)),
+      | _ => {
+        Err(ParseError::new(
+          format!(
+            "expected compound assignment operator, found '{}'",
+            token.value
+          ),
+          token.location,
+        ))
+      },
+    }
+  }
+
+  fn resolve_postfix_op(token: &Token) -> Result<PostfixOp> {
+    match token.kind {
+      | TokenKind::Inc => Ok(PostfixOp::Inc),
+      | TokenKind::Dec => Ok(PostfixOp::Dec),
+      | _ => {
+        Err(ParseError::new(
+          format!("expected postfix operator, found '{}'", token.value),
+          token.location,
+        ))
+      },
     }
   }
 }
@@ -783,16 +856,68 @@ mod tests {
 
   #[test]
   fn parse_unary_not() {
-    let actual = parser("!42;").statement();
+    let actual = parser("!42;").expression(0);
 
-    let expected = Statement::Expression(Expression::Unary(Unary {
+    let expected = Expression::Unary(Unary {
       op: UnaryOp::Not,
       expression: Box::new(Expression::Constant(Int {
         value: 42,
         location: Location::default(),
       })),
       location: Location::default(),
-    }));
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_unary_postfix_dec() {
+    let actual = parser("a--").expression(0);
+
+    let expected = Expression::Postfix(Postfix {
+      op: PostfixOp::Dec,
+      operand: Box::new(Expression::Var(Ident {
+        value: "a".to_string().into(),
+        location: Location::default(),
+      })),
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_unary_postfix_inc() {
+    let actual = parser("a++").expression(0);
+
+    let expected = Expression::Postfix(Postfix {
+      op: PostfixOp::Inc,
+      operand: Box::new(Expression::Var(Ident {
+        value: "a".to_string().into(),
+        location: Location::default(),
+      })),
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_unary_postfix_sequence() {
+    let actual = parser("(a--)++").expression(0);
+
+    let expected = Expression::Postfix(Postfix {
+      op: PostfixOp::Inc,
+      operand: Box::new(Expression::Postfix(Postfix {
+        op: PostfixOp::Dec,
+        operand: Box::new(Expression::Var(Ident {
+          value: "a".to_string().into(),
+          location: Location::default(),
+        })),
+        location: Location::default(),
+      })),
+      location: Location::default(),
+    });
 
     assert_eq!(actual, Ok(expected));
   }

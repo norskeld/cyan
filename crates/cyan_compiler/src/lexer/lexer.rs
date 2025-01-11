@@ -3,6 +3,36 @@ use cyan_reporting::{Location, Span};
 use super::ascii::*;
 use super::token::{Token, TokenKind};
 
+/// Helper macro to select and create a token based on the next character.
+///
+/// ## Example
+///
+/// ```ignore
+/// select!(self, {
+///   PLUS => (TokenKind::Inc, 2),
+///   EQUAL => (TokenKind::AddAssign, 2),
+///   _ => (TokenKind::Add, 1),
+/// })
+/// ```
+macro_rules! select {
+  ($self:expr, {
+    $($pattern:pat $(if $guard:expr)? => ($kind:expr, $offset:expr)),+ $(,)?
+  }) => {
+    {
+      let start = $self.position;
+      let line = $self.line;
+
+      let (kind, offset) = match $self.peek(1) {
+        $(| $pattern $(if $guard)? => ($kind, $offset),)+
+      };
+
+      $self.position += offset;
+
+      $self.token(kind, start, line)
+    }
+  };
+}
+
 pub struct Lexer<'i> {
   /// The stream of bytes to process.
   input: &'i [u8],
@@ -220,214 +250,141 @@ impl Lexer<'_> {
     Token::eof(location)
   }
 
-  /// Returns a token for a `;`.
+  /// Returns a token for `;`.
   fn semicolon(&mut self) -> Token {
     self.token_single(TokenKind::Semi)
   }
 
-  /// Returns a token for a `{`.
+  /// Returns a token for `{`.
   fn brace_open(&mut self) -> Token {
     self.token_single(TokenKind::BraceOpen)
   }
 
-  /// Returns a token for a `}`.
+  /// Returns a token for `}`.
   fn brace_close(&mut self) -> Token {
     self.token_single(TokenKind::BraceClose)
   }
 
-  /// Returns a token for a `(`.
+  /// Returns a token for `(`.
   fn paren_open(&mut self) -> Token {
     self.token_single(TokenKind::ParenOpen)
   }
 
-  /// Returns a token for a `)`.
+  /// Returns a token for `)`.
   fn paren_close(&mut self) -> Token {
     self.token_single(TokenKind::ParenClose)
   }
 
-  /// Returns a token for a `~` (bitwise not).
+  /// Returns a token for `~`.
   fn tilde(&mut self) -> Token {
     self.token_single(TokenKind::BitNot)
   }
 
-  /// Returns a token for a `|` (bitwise or).
+  /// Returns a token for: `|`, `|=`, `||`.
   fn pipe(&mut self) -> Token {
-    let start = self.position;
-    let line = self.line;
-
-    let kind = match self.peek(1) {
-      | PIPE => {
-        self.position += 2;
-        TokenKind::Or
-      },
-      | _ => {
-        self.position += 1;
-        TokenKind::BitOr
-      },
-    };
-
-    self.token(kind, start, line)
+    select!(self, {
+      EQUAL => (TokenKind::BitOrAssign, 2),
+      PIPE => (TokenKind::Or, 2),
+      _ => (TokenKind::BitOr, 1),
+    })
   }
 
-  /// Returns a token for a `^` (bitwise xor).
+  /// Returns a token for: `^`, `^=`.
   fn caret(&mut self) -> Token {
-    self.token_single(TokenKind::BitXor)
+    select!(self, {
+      EQUAL => (TokenKind::BitXorAssign, 2),
+      _ => (TokenKind::BitXor, 1),
+    })
   }
 
-  /// Returns a token for a `&` (bitwise and).
+  /// Returns a token for: `&`, `&=`, `&&`.
   fn ampersand(&mut self) -> Token {
-    let start = self.position;
-    let line = self.line;
-
-    let kind = match self.peek(1) {
-      | AMPERSAND => {
-        self.position += 2;
-        TokenKind::And
-      },
-      | _ => {
-        self.position += 1;
-        TokenKind::BitAnd
-      },
-    };
-
-    self.token(kind, start, line)
+    select!(self, {
+      EQUAL => (TokenKind::BitAndAssign, 2),
+      AMPERSAND => (TokenKind::And, 2),
+      _ => (TokenKind::BitAnd, 1),
+    })
   }
 
-  /// Returns a token for one of: a `<<` (bitwise shift left), a `<=`, or a `<`.
+  /// Returns a token for: `<=`, `<<=`, `<<`, `<`.
   fn less(&mut self) -> Token {
-    let start = self.position;
-    let line = self.line;
-
-    let kind = match self.peek(1) {
-      | LESS => {
-        self.position += 2;
-        TokenKind::BitShl
-      },
-      | EQUAL => {
-        self.position += 2;
-        TokenKind::LessEqual
-      },
-      | _ => {
-        self.position += 1;
-        TokenKind::Less
-      },
-    };
-
-    self.token(kind, start, line)
+    select!(self, {
+      EQUAL => (TokenKind::LessEqual, 2),
+      LESS if self.peek(2) == EQUAL => (TokenKind::BitShlAssign, 3),
+      LESS => (TokenKind::BitShl, 2),
+      _ => (TokenKind::Less, 1),
+    })
   }
 
-  /// Returns a token for one of: a `>>` (bitwise shift right), a `>=`, or a `>`.
+  /// Returns a token for: `>=`, `>>=`, `>>`, `>`.
   fn greater(&mut self) -> Token {
-    let start = self.position;
-    let line = self.line;
-
-    let kind = match self.peek(1) {
-      | GREATER => {
-        self.position += 2;
-        TokenKind::BitShr
-      },
-      | EQUAL => {
-        self.position += 2;
-        TokenKind::GreaterEqual
-      },
-      | _ => {
-        self.position += 1;
-        TokenKind::Greater
-      },
-    };
-
-    self.token(kind, start, line)
+    select!(self, {
+      EQUAL => (TokenKind::GreaterEqual, 2),
+      GREATER if self.peek(2) == EQUAL => (TokenKind::BitShrAssign, 3),
+      GREATER => (TokenKind::BitShr, 2),
+      _ => (TokenKind::Greater, 1),
+    })
   }
 
-  /// Returns a token for either a `!` or a `!=`.
+  /// Returns a token for: `!=`, `!`.
   fn bang(&mut self) -> Token {
-    let start = self.position;
-    let line = self.line;
-
-    let kind = match self.peek(1) {
-      | EQUAL => {
-        self.position += 2;
-        TokenKind::NotEqual
-      },
-      | _ => {
-        self.position += 1;
-        TokenKind::Bang
-      },
-    };
-
-    self.token(kind, start, line)
+    select!(self, {
+      EQUAL => (TokenKind::NotEqual, 2),
+      _ => (TokenKind::Bang, 1),
+    })
   }
 
-  /// Returns a token for either a `=` or a `==`.
+  /// Returns a token for: `==`, `=`.
   fn equal(&mut self) -> Token {
-    let start = self.position;
-    let line = self.line;
-
-    if self.peek(1) == EQUAL {
-      self.position += 2;
-
-      return self.token(TokenKind::Equal, start, line);
-    }
-
-    self.position += 1;
-
-    self.token(TokenKind::Assign, start, line)
+    select!(self, {
+      EQUAL => (TokenKind::Equal, 2),
+      _ => (TokenKind::Assign, 1),
+    })
   }
 
-  /// Returns a token for a `/`.
+  /// Returns a token for: `/=`, `/`.
   fn slash(&mut self) -> Token {
-    self.token_single(TokenKind::Div)
+    select!(self, {
+      EQUAL => (TokenKind::DivAssign, 2),
+      _ => (TokenKind::Div, 1),
+    })
   }
 
-  /// Returns a token for a `*`.
+  /// Returns a token for: `*=`, `*`.
   fn star(&mut self) -> Token {
-    self.token_single(TokenKind::Mul)
+    select!(self, {
+      EQUAL => (TokenKind::MulAssign, 2),
+      _ => (TokenKind::Mul, 1),
+    })
   }
 
-  /// Returns a token for a `%`.
+  /// Returns a token for: `%=`, `%`.
   fn percent(&mut self) -> Token {
-    self.token_single(TokenKind::Mod)
+    select!(self, {
+      EQUAL => (TokenKind::ModAssign, 2),
+      _ => (TokenKind::Mod, 1),
+    })
   }
 
-  /// Returns a token for either a `+` or a `++` (increment).
+  /// Returns a token for: `+=`, `++`, `+`.
   fn plus(&mut self) -> Token {
-    let start = self.position;
-    let line = self.line;
-
-    // We look ahead to see if the next character is a plus. If we have two consecutive pluses,
-    // we return token for an increment operator.
-    if self.peek(1) == PLUS {
-      self.position += 2;
-
-      return self.token(TokenKind::Inc, start, line);
-    }
-
-    // Otherwise, we return an add operator.
-    self.position += 1;
-
-    self.token(TokenKind::Add, start, line)
+    select!(self, {
+      EQUAL => (TokenKind::AddAssign, 2),
+      PLUS => (TokenKind::Inc, 2),
+      _ => (TokenKind::Add, 1),
+    })
   }
 
-  /// Returns a token for a `-` or `--` (decrement).
+  /// Returns a token for: `-=`, `--`, `-`.
   fn hyphen(&mut self) -> Token {
-    let start = self.position;
-    let line = self.line;
-
-    // We look ahead to see if the next character is a hyphen. If we have two consecutive hyphens,
-    // we return token for a decrement operator.
-    if self.peek(1) == HYPHEN {
-      self.position += 2;
-
-      return self.token(TokenKind::Dec, start, line);
-    }
-
-    // Otherwise, we return a negate operator.
-    self.position += 1;
-
-    self.token(TokenKind::Sub, start, line)
+    select!(self, {
+      EQUAL => (TokenKind::SubAssign, 2),
+      HYPHEN => (TokenKind::Dec, 2),
+      _ => (TokenKind::Sub, 1),
+    })
   }
 
-  /// Returns a token for a `_`.
+  /// Returns a token for `_`.
   fn underscore(&mut self) -> Token {
     let start = self.position;
 
@@ -676,6 +633,15 @@ mod tests {
   }
 
   #[test]
+  fn lex_arithmetic_compound_operators() {
+    assert_token!("+=", AddAssign, "+=", 1..1, 1..3);
+    assert_token!("-=", SubAssign, "-=", 1..1, 1..3);
+    assert_token!("*=", MulAssign, "*=", 1..1, 1..3);
+    assert_token!("/=", DivAssign, "/=", 1..1, 1..3);
+    assert_token!("%=", ModAssign, "%=", 1..1, 1..3);
+  }
+
+  #[test]
   fn lex_logical_binary_operators() {
     assert_token!("&&", And, "&&", 1..1, 1..3);
     assert_token!("||", Or, "||", 1..1, 1..3);
@@ -694,6 +660,15 @@ mod tests {
     assert_token!("&", BitAnd, "&", 1..1, 1..2);
     assert_token!("<<", BitShl, "<<", 1..1, 1..3);
     assert_token!(">>", BitShr, ">>", 1..1, 1..3);
+  }
+
+  #[test]
+  fn lex_bitwise_compound_operators() {
+    assert_token!("<<=", BitShlAssign, "<<=", 1..1, 1..4);
+    assert_token!(">>=", BitShrAssign, ">>=", 1..1, 1..4);
+    assert_token!("&=", BitAndAssign, "&=", 1..1, 1..3);
+    assert_token!("|=", BitOrAssign, "|=", 1..1, 1..3);
+    assert_token!("^=", BitXorAssign, "^=", 1..1, 1..3);
   }
 
   #[test]
