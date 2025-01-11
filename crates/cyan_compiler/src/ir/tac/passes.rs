@@ -5,6 +5,8 @@ use crate::context::Context;
 use crate::ir::ast;
 use crate::ir::tac::*;
 
+pub type Result<T> = std::result::Result<T, LoweringError>;
+
 #[derive(Debug, Error)]
 #[error("AST lowering error {location}: {message}")]
 pub struct LoweringError {
@@ -36,19 +38,19 @@ impl<'ctx> LoweringPass<'ctx> {
   }
 
   /// Lowers AST to TAC.
-  pub fn lower(&mut self, program: &ast::Program) -> Result<Program, LoweringError> {
+  pub fn lower(&mut self, program: &ast::Program) -> Result<Program> {
     self.lower_program(program)
   }
 
   /// Lowers an AST program to a TAC equivalent.
-  fn lower_program(&mut self, program: &ast::Program) -> Result<Program, LoweringError> {
+  fn lower_program(&mut self, program: &ast::Program) -> Result<Program> {
     let function = self.lower_function(&program.function)?;
 
     Ok(Program { function })
   }
 
   /// Lowers a function by converting its body to a flat sequence of instructions.
-  fn lower_function(&mut self, function: &ast::Function) -> Result<Function, LoweringError> {
+  fn lower_function(&mut self, function: &ast::Function) -> Result<Function> {
     // Set the prefix for temporary variables to current function's name so that emitted
     // instructions' temporary variables names are "scoped".
     self.ctx.var_prefix = function.name.value;
@@ -73,7 +75,7 @@ impl<'ctx> LoweringPass<'ctx> {
     &mut self,
     block_item: &ast::BlockItem,
     instructions: &mut Vec<Instruction>,
-  ) -> Result<(), LoweringError> {
+  ) -> Result<()> {
     match block_item {
       | ast::BlockItem::Declaration(declaration) => {
         self.emit_declaration(declaration, instructions)
@@ -91,7 +93,7 @@ impl<'ctx> LoweringPass<'ctx> {
       location,
     }: &ast::Declaration,
     instructions: &mut Vec<Instruction>,
-  ) -> Result<(), LoweringError> {
+  ) -> Result<()> {
     // Treating declaration with initializer like an assignment expression. This is suboptimal, but
     // will do for now.
     if let Some(right) = initializer {
@@ -115,7 +117,7 @@ impl<'ctx> LoweringPass<'ctx> {
     &mut self,
     statement: &ast::Statement,
     instructions: &mut Vec<Instruction>,
-  ) -> Result<(), LoweringError> {
+  ) -> Result<()> {
     match statement {
       | ast::Statement::Return(expression) => {
         let value = self.emit_expression(expression, instructions)?;
@@ -137,7 +139,7 @@ impl<'ctx> LoweringPass<'ctx> {
     &mut self,
     expression: &ast::Expression,
     instructions: &mut Vec<Instruction>,
-  ) -> Result<Value, LoweringError> {
+  ) -> Result<Value> {
     // `Value`s are Copy, so we don't need to `clone` them, they'll be copied.
     match expression {
       | ast::Expression::Constant(int) => Ok(Value::Constant(int.value)),
@@ -147,7 +149,10 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::Expression::Binary(binary) if binary.is_or() => self.emit_or(binary, instructions),
       | ast::Expression::Binary(binary) => self.emit_binary(binary, instructions),
       | ast::Expression::Assignment(assignment) => self.emit_assignment(assignment, instructions),
-      | _ => todo!("emit expression"),
+      | ast::Expression::CompoundAssignment(assignment) => {
+        self.emit_compound_assignment(assignment, instructions)
+      },
+      | ast::Expression::Postfix(postfix) => self.emit_postfix(postfix, instructions),
     }
   }
 
@@ -156,8 +161,8 @@ impl<'ctx> LoweringPass<'ctx> {
     &mut self,
     unary: &ast::Unary,
     instructions: &mut Vec<Instruction>,
-  ) -> Result<Value, LoweringError> {
-    let op = self.lower_unary_op(&unary.op);
+  ) -> Result<Value> {
+    let op = self.lower_unary_op(&unary.op, unary.location)?;
     let src = self.emit_expression(&unary.expression, instructions)?;
     let dst = Value::Var(self.ctx.gen_temporary());
 
@@ -171,8 +176,8 @@ impl<'ctx> LoweringPass<'ctx> {
     &mut self,
     binary: &ast::Binary,
     instructions: &mut Vec<Instruction>,
-  ) -> Result<Value, LoweringError> {
-    let op = self.lower_binary_op(binary)?;
+  ) -> Result<Value> {
+    let op = self.lower_binary_op(&binary.op, binary.location)?;
     let left = self.emit_expression(&binary.left, instructions)?;
     let right = self.emit_expression(&binary.right, instructions)?;
     let dst = Value::Var(self.ctx.gen_temporary());
@@ -192,7 +197,7 @@ impl<'ctx> LoweringPass<'ctx> {
     &mut self,
     assignment: &ast::Assignment,
     instructions: &mut Vec<Instruction>,
-  ) -> Result<Value, LoweringError> {
+  ) -> Result<Value> {
     match *assignment.left {
       | ast::Expression::Var(ident) => {
         let src = self.emit_expression(&assignment.right, instructions)?;
@@ -204,8 +209,75 @@ impl<'ctx> LoweringPass<'ctx> {
       },
       | _ => {
         Err(LoweringError::new(
-          "invalid lvalue",
+          "invalid lvalue of assignment",
           *assignment.left.location(),
+        ))
+      },
+    }
+  }
+
+  /// Emits instructions for compound assignments.
+  fn emit_compound_assignment(
+    &mut self,
+    assignment: &ast::CompoundAssignment,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<Value> {
+    match *assignment.left {
+      | ast::Expression::Var(ident) => {
+        let op = self.lower_binary_op(&assignment.op, assignment.location)?;
+        let right = self.emit_expression(&assignment.right, instructions)?;
+        let dst = Value::Var(ident.value);
+
+        instructions.push(Instruction::Binary {
+          op,
+          left: dst,
+          right,
+          dst,
+        });
+
+        Ok(dst)
+      },
+      | _ => {
+        Err(LoweringError::new(
+          "invalid lvalue of compound assignment",
+          *assignment.left.location(),
+        ))
+      },
+    }
+  }
+
+  /// Emits instructions for postfix expressions.
+  fn emit_postfix(
+    &mut self,
+    postfix: &ast::Postfix,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<Value> {
+    match *postfix.operand {
+      | ast::Expression::Var(ident) => {
+        // Converting postfix operator to a binary operator first.
+        let binary_op = self.convert_postfix_op(&postfix.op);
+        let op = self.lower_binary_op(&binary_op, postfix.location)?;
+        let src = Value::Var(ident.value);
+        let dst = Value::Var(self.ctx.gen_temporary());
+
+        // 1. Copy x's value to temp (to return original value).
+        // 2. Add/subtract 1 to/from x and store back in x.
+        instructions.extend([
+          Instruction::Copy { src, dst },
+          Instruction::Binary {
+            op,
+            left: src,
+            right: Value::Constant(1),
+            dst: src,
+          },
+        ]);
+
+        Ok(dst)
+      },
+      | _ => {
+        Err(LoweringError::new(
+          "invalid operand of postfix expression",
+          *postfix.operand.location(),
         ))
       },
     }
@@ -244,7 +316,7 @@ impl<'ctx> LoweringPass<'ctx> {
     &mut self,
     binary: &ast::Binary,
     instructions: &mut Vec<Instruction>,
-  ) -> Result<Value, LoweringError> {
+  ) -> Result<Value> {
     // We don't push instructions emitted for subexpressions straight to the main instructions
     // vector, because we need to interleave them with the jump instructions.
     let mut left_instructions = vec![];
@@ -298,7 +370,7 @@ impl<'ctx> LoweringPass<'ctx> {
     &mut self,
     binary: &ast::Binary,
     instructions: &mut Vec<Instruction>,
-  ) -> Result<Value, LoweringError> {
+  ) -> Result<Value> {
     // We don't push instructions emitted for subexpressions straight to the main instructions
     // vector, because we need to interleave them with the jump instructions.
     let mut left_instructions = vec![];
@@ -343,22 +415,36 @@ impl<'ctx> LoweringPass<'ctx> {
     Ok(dst)
   }
 
+  /// Converts a postfix operator (AST) to an binary operator (also AST).
+  fn convert_postfix_op(&self, op: &ast::PostfixOp) -> ast::BinaryOp {
+    match op {
+      | ast::PostfixOp::Dec => ast::BinaryOp::Add,
+      | ast::PostfixOp::Inc => ast::BinaryOp::Sub,
+    }
+  }
+
   /// Lowers an unary operator to its TAC equivalent.
-  fn lower_unary_op(&self, op: &ast::UnaryOp) -> UnaryOp {
+  fn lower_unary_op(&self, op: &ast::UnaryOp, location: Location) -> Result<UnaryOp> {
     match op {
       // Arithmetics operators.
-      | ast::UnaryOp::Negate => UnaryOp::Negate,
+      | ast::UnaryOp::Negate => Ok(UnaryOp::Negate),
       // Bitwise operators.
-      | ast::UnaryOp::BitNot => UnaryOp::BitNot,
+      | ast::UnaryOp::BitNot => Ok(UnaryOp::BitNot),
       // Logical operators.
-      | ast::UnaryOp::Not => UnaryOp::Not,
-      | _ => todo!("lower unary op"),
+      | ast::UnaryOp::Not => Ok(UnaryOp::Not),
+      // Other operators.
+      | ast::UnaryOp::Dec | ast::UnaryOp::Inc => {
+        Err(LoweringError::new(
+          "++ and -- operators cannot be directly lowered to TAC",
+          location,
+        ))
+      },
     }
   }
 
   /// Lowers a binary operator to its TAC equivalent.
-  fn lower_binary_op(&self, binary: &ast::Binary) -> Result<BinaryOp, LoweringError> {
-    match binary.op {
+  fn lower_binary_op(&self, op: &ast::BinaryOp, location: Location) -> Result<BinaryOp> {
+    match op {
       // Arithmetics operators.
       | ast::BinaryOp::Add => Ok(BinaryOp::Add),
       | ast::BinaryOp::Div => Ok(BinaryOp::Div),
@@ -381,7 +467,7 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::BinaryOp::And | ast::BinaryOp::Or => {
         Err(LoweringError::new(
           "|| and && cannot be directly lowered to TAC",
-          binary.location,
+          location,
         ))
       },
     }
