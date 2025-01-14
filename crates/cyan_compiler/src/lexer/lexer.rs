@@ -203,6 +203,8 @@ impl Lexer<'_> {
       | SLASH => self.slash(),
       | STAR => self.star(),
       | PERCENT => self.percent(),
+      | COLON => self.colon(),
+      | QUESTION => self.question(),
       | SEMICOLON => self.semicolon(),
       | BRACE_OPEN => self.brace_open(),
       | BRACE_CLOSE => self.brace_close(),
@@ -248,6 +250,16 @@ impl Lexer<'_> {
     };
 
     Token::eof(location)
+  }
+
+  /// Returns a token for `:`.
+  fn colon(&mut self) -> Token {
+    self.token_single(TokenKind::Colon)
+  }
+
+  /// Returns a token for `?`.
+  fn question(&mut self) -> Token {
+    self.token_single(TokenKind::Question)
   }
 
   /// Returns a token for `;`.
@@ -422,6 +434,12 @@ impl Lexer<'_> {
     let value = slice.as_str();
 
     let kind = match length {
+      | 2 => {
+        match value {
+          | "if" => TokenKind::IfKw,
+          | _ => TokenKind::Ident,
+        }
+      },
       | 3 => {
         match value {
           | "int" => TokenKind::IntKw,
@@ -430,6 +448,7 @@ impl Lexer<'_> {
       },
       | 4 => {
         match value {
+          | "else" => TokenKind::ElseKw,
           | "void" => TokenKind::VoidKw,
           | _ => TokenKind::Ident,
         }
@@ -589,6 +608,8 @@ mod tests {
 
   #[test]
   fn lex_keyword() {
+    assert_token!("if", IfKw, "if", 1..1, 1..3);
+    assert_token!("else", ElseKw, "else", 1..1, 1..5);
     assert_token!("int", IntKw, "int", 1..1, 1..4);
     assert_token!("void", VoidKw, "void", 1..1, 1..5);
     assert_token!("return", ReturnKw, "return", 1..1, 1..7);
@@ -679,6 +700,13 @@ mod tests {
       token(Sub, "-", 1..1, 2..3),
       token(Ident, "a", 1..1, 3..4)
     );
+  }
+
+  #[test]
+  fn lex_punctuation() {
+    assert_token!(":", Colon, ":", 1..1, 1..2);
+    assert_token!(";", Semi, ";", 1..1, 1..2);
+    assert_token!("?", Question, "?", 1..1, 1..2);
   }
 
   #[test]

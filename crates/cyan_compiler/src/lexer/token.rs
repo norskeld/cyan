@@ -5,6 +5,8 @@ use cyan_reporting::Location;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenKind {
   // Keywords.
+  ElseKw,
+  IfKw,
   IntKw,
   ReturnKw,
   VoidKw,
@@ -50,9 +52,11 @@ pub enum TokenKind {
   // Punctuation.
   BraceClose,
   BraceOpen,
+  Colon,
   ParenClose,
   ParenOpen,
   Semi,
+  Question,
   // Non-terminals.
   Int,
   Ident,
@@ -117,6 +121,7 @@ impl TokenKind {
     }
   }
 
+  /// Returns `true` if the token kind is an assignment operator.
   pub fn is_assignment_op(&self) -> bool {
     match self {
       // Assignment operator.
@@ -137,10 +142,17 @@ impl TokenKind {
     }
   }
 
+  /// Returns `true` if the token kind is a ternary operator opener, i.e. `?`.
+  pub fn is_ternary_op(&self) -> bool {
+    matches!(self, Self::Question)
+  }
+
   /// Returns token kind description.
   pub fn description(&self) -> &str {
     match self {
       // Keywords.
+      | Self::ElseKw => "the 'else' keyword",
+      | Self::IfKw => "the 'if' keyword",
       | Self::IntKw => "the 'int' keyword",
       | Self::ReturnKw => "the 'return' keyword",
       | Self::VoidKw => "the 'void' keyword",
@@ -184,11 +196,13 @@ impl TokenKind {
       | Self::Dec => "a '--'",
       | Self::Inc => "a '++'",
       // Punctuation.
+      | Self::Colon => "a ':'",
       | Self::BraceClose => "a '}'",
       | Self::BraceOpen => "a '{'",
       | Self::ParenClose => "a ')'",
       | Self::ParenOpen => "a '('",
       | Self::Semi => "a ';'",
+      | Self::Question => "a '?'",
       // Non-terminals.
       | Self::Int => "an integer",
       | Self::Ident => "an identifier",
@@ -261,6 +275,11 @@ impl Token {
   /// Returns `true` if the token is an assignment operator.
   pub fn is_assignment_op(&self) -> bool {
     self.kind.is_assignment_op()
+  }
+
+  /// Returns `true` if the token is a ternary operator.
+  pub fn is_ternary_op(&self) -> bool {
+    self.kind.is_ternary_op()
   }
 }
 

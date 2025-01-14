@@ -29,10 +29,11 @@ pub struct Declaration {
   pub location: Location,
 }
 
-#[derive(Debug, Located, PartialEq, Eq)]
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
 pub enum Statement {
   Return(Expression),
   Expression(Expression),
+  If(If),
   Null { location: Location },
 }
 
@@ -42,9 +43,10 @@ pub enum Expression {
   Var(Ident),
   Unary(Unary),
   Binary(Binary),
+  Postfix(Postfix),
+  Ternary(Ternary),
   Assignment(Assignment),
   CompoundAssignment(CompoundAssignment),
-  Postfix(Postfix),
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
@@ -135,6 +137,22 @@ pub struct Postfix {
 pub enum PostfixOp {
   Inc,
   Dec,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct If {
+  pub condition: Box<Expression>,
+  pub then: Box<Statement>,
+  pub otherwise: Option<Box<Statement>>,
+  pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Ternary {
+  pub condition: Box<Expression>,
+  pub then: Box<Expression>,
+  pub otherwise: Box<Expression>,
+  pub location: Location,
 }
 
 #[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]

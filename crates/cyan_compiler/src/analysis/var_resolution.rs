@@ -134,6 +134,9 @@ impl<'ctx> VarResolutionPass<'ctx> {
           .resolve_expression(expression, variables)
           .map(Statement::Expression)
       },
+      | Statement::If(_conditional) => {
+        todo!("conditional statement")
+      },
       | Statement::Null { location } => {
         Ok(Statement::Null {
           location: *location,
@@ -241,6 +244,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
           ))
         }
       },
+      | Expression::Ternary(_ternary) => todo!("ternary expression"),
     }
   }
 }
