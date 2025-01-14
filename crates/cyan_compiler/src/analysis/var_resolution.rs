@@ -134,8 +134,28 @@ impl<'ctx> VarResolutionPass<'ctx> {
           .resolve_expression(expression, variables)
           .map(Statement::Expression)
       },
-      | Statement::If(_conditional) => {
-        todo!("conditional statement")
+      | Statement::If(conditional) => {
+        let condition = self
+          .resolve_expression(&conditional.condition, variables)
+          .map(Box::new)?;
+
+        let then = self
+          .resolve_statement(&conditional.then, variables)
+          .map(Box::new)?;
+
+        let otherwise = conditional
+          .otherwise
+          .as_ref()
+          .map(|otherwise| self.resolve_statement(otherwise, variables))
+          .transpose()?
+          .map(Box::new);
+
+        Ok(Statement::If(If {
+          condition,
+          then,
+          otherwise,
+          location: conditional.location,
+        }))
       },
       | Statement::Null { location } => {
         Ok(Statement::Null {
@@ -244,7 +264,18 @@ impl<'ctx> VarResolutionPass<'ctx> {
           ))
         }
       },
-      | Expression::Ternary(_ternary) => todo!("ternary expression"),
+      | Expression::Ternary(ternary) => {
+        let condition = self.resolve_expression(&ternary.condition, variables)?;
+        let then = self.resolve_expression(&ternary.then, variables)?;
+        let otherwise = self.resolve_expression(&ternary.otherwise, variables)?;
+
+        Ok(Expression::Ternary(Ternary {
+          condition: Box::new(condition),
+          then: Box::new(then),
+          otherwise: Box::new(otherwise),
+          location: ternary.location,
+        }))
+      },
     }
   }
 }
