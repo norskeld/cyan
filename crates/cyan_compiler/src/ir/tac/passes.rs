@@ -130,6 +130,9 @@ impl<'ctx> LoweringPass<'ctx> {
 
         Ok(())
       },
+      | ast::Statement::If(_condition) => {
+        todo!("conditional statement")
+      },
       | ast::Statement::Null { .. } => Ok(()),
     }
   }
@@ -148,11 +151,12 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::Expression::Binary(binary) if binary.is_and() => self.emit_and(binary, instructions),
       | ast::Expression::Binary(binary) if binary.is_or() => self.emit_or(binary, instructions),
       | ast::Expression::Binary(binary) => self.emit_binary(binary, instructions),
+      | ast::Expression::Postfix(postfix) => self.emit_postfix(postfix, instructions),
+      | ast::Expression::Ternary(_ternary) => todo!("ternary expression"),
       | ast::Expression::Assignment(assignment) => self.emit_assignment(assignment, instructions),
       | ast::Expression::CompoundAssignment(assignment) => {
         self.emit_compound_assignment(assignment, instructions)
       },
-      | ast::Expression::Postfix(postfix) => self.emit_postfix(postfix, instructions),
     }
   }
 

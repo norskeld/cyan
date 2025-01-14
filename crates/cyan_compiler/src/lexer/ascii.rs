@@ -21,7 +21,7 @@ pub const UNDERSCORE: u8 = b'_';
 
 // pub const COMMA: u8 = b',';
 // pub const DOT: u8 = b'.';
-// pub const QUESTION: u8 = b'?';
+pub const QUESTION: u8 = b'?';
 
 // pub const DOUBLE_QUOTE: u8 = b'"';
 // pub const SINGLE_QUOTE: u8 = b'\'';
@@ -30,7 +30,7 @@ pub const STAR: u8 = b'*';
 pub const PLUS: u8 = b'+';
 pub const HYPHEN: u8 = b'-';
 pub const SLASH: u8 = b'/';
-// pub const COLON: u8 = b':';
+pub const COLON: u8 = b':';
 pub const SEMICOLON: u8 = b';';
 pub const LESS: u8 = b'<';
 pub const EQUAL: u8 = b'=';

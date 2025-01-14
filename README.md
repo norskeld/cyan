@@ -7,24 +7,29 @@ Compiler for a subset of C.
 ## Grammar
 
 ```ebnf
-<program>     ::= <function>
-<function>    ::= "int" <identifier> "(" "void" ")" "{" { <block-item> } "}"
-<block-item>  ::= <declaration> | <statement>
-<declaration> ::= "int" <identifier> [ "=" <expression> ] ";"
-<statement>   ::= "return" <expression> ";" | <expression> ";" | ";"
-<expression>  ::= <factor> | <expression> <binary-op> <expression>
-<factor>      ::= <unary-op> <factor> | <postfix>
-<postfix>     ::= <primary> { <postfix-op> }
-<primary>     ::= <int> | <identifier> | "(" <expression> ")"
-<unary-op>    ::= "-" | "~" | "!" | "++" | "--"
-<postfix-op>  ::= "++" | "--"
-<binary-op>   ::= "+" | "-" | "*" | "/" | "%"
-                | "<<" | ">>" | "&" | "|" | "^"
-                | "&&" | "||" | "==" | "!=" | "<" | "<=" | ">" | ">="
-                | "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
+<program>     = <function>
+<function>    = "int" <identifier> "(" "void" ")" "{" { <block-item> } "}"
+<block-item>  = <declaration> | <statement>
+<declaration> = "int" <identifier> [ "=" <expression> ] ";"
+<statement>   = "return" <expression> ";"
+              | <expression> ";"
+              | "if" "(" <expression> ")" <statement> [ "else" <statement> ]
+              | ";"
+<expression>  = <factor>
+              | <expression> <binary-op> <expression>
+              | <expression> "?" <expression> ":" <expression>
+<factor>      = <unary-op> <factor> | <postfix>
+<postfix>     = <primary> { <postfix-op> }
+<primary>     = <int> | <identifier> | "(" <expression> ")"
+<unary-op>    = "-" | "~" | "!" | "++" | "--"
+<postfix-op>  = "++" | "--"
+<binary-op>   = "+" | "-" | "*" | "/" | "%"
+              | "<<" | ">>" | "&" | "|" | "^"
+              | "&&" | "||" | "==" | "!=" | "<" | "<=" | ">" | ">="
+              | "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
 
-<identifier>  ::= ? An identifier token ?
-<int>         ::= ? A constant token ?
+<identifier>  = ? An identifier token ?
+<int>         = ? A constant token ?
 ```
 
 ## Trees and IRs
@@ -55,6 +60,7 @@ declaration =
 statement =
   | Return(expression)
   | Expression(expression)
+  | If(expression condition, statement then, statement? else)
   | Null
 
 expression =
@@ -63,6 +69,7 @@ expression =
   | Unary(unary_op op, expression expression)
   | Binary(binary_op op, expression left, expression right)
   | Postfix(postfix_op op, expression operand)
+  | Ternary(expression condition, expression then, expression otherwise)
   | Assignment(expression lvalue, expression rvalue)
   | CompoundAssignment(binary_op op, expression lvalue, expression rvalue)
 

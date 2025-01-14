@@ -222,10 +222,51 @@ impl Parser {
     let token = self.peek();
 
     match token.kind {
+      | TokenKind::IfKw => self.statement_if(),
       | TokenKind::ReturnKw => self.statement_return(),
       | TokenKind::Semi => self.statement_null(),
       | _ => self.statement_expression(),
     }
+  }
+
+  /// Parses an if statement.
+  fn statement_if(&mut self) -> Result<Statement> {
+    // Consume the `if` keyword.
+    let if_token = self.consume()?;
+
+    // Parse the condition.
+    self.expect(TokenKind::ParenOpen)?;
+    let condition = self.expression(0).map(Box::new)?;
+    self.expect(TokenKind::ParenClose)?;
+
+    // Parse the `then` branch.
+    let then = self.statement().map(Box::new)?;
+
+    // Parse the optional `else` branch.
+    let otherwise = match self.peek().kind {
+      | TokenKind::ElseKw => {
+        self.consume()?;
+        let otherwise = self.statement().map(Box::new)?;
+
+        Some(otherwise)
+      },
+      | _ => None,
+    };
+
+    let location = Location::merge(
+      &if_token.location,
+      // If we have an else branch, then merge with its location.
+      otherwise
+        .as_ref()
+        .map_or_else(|| then.location(), |otherwise| otherwise.location()),
+    );
+
+    Ok(Statement::If(If {
+      condition,
+      then,
+      otherwise,
+      location,
+    }))
   }
 
   /// Parses a return statement.
@@ -262,7 +303,7 @@ impl Parser {
     let mut left = self.factor()?;
     let mut next = self.peek();
 
-    while next.is_binary_op() {
+    while next.is_binary_op() || next.is_ternary_op() {
       match Self::precedence(next) {
         | Some(precedence) if precedence >= min_precedence => {
           // Handle assignments differently, because unlike other binary operators they are
@@ -300,6 +341,26 @@ impl Parser {
                 })
               },
             }
+          }
+          // We special-case ternary operators too.
+          //
+          // This time we perform a trick: we parse the ternary operator almost like as a binary
+          // operator, where the operator in the middle is `"?" <expression> ":"`, i.e. that
+          // operator is delimited by `?` and `:` tokens.
+          //
+          // This way we can assign a precedence relative to other binary operators.
+          else if next.is_ternary_op() {
+            let middle = self.ternary_middle()?;
+            let right = self.expression(precedence)?;
+
+            let location = Location::merge(left.location(), right.location());
+
+            left = Expression::Ternary(Ternary {
+              condition: Box::new(left),
+              then: Box::new(middle),
+              otherwise: Box::new(right),
+              location,
+            })
           }
           // Otherwise, we just parse the (left-associative) binary operators.
           else {
@@ -351,6 +412,15 @@ impl Parser {
     }
 
     Ok(primary)
+  }
+
+  /// Parses the middle (then branch) of a ternary operator.
+  fn ternary_middle(&mut self) -> Result<Expression> {
+    self.consume()?;
+    let condition = self.expression(0)?;
+    self.expect(TokenKind::Colon)?;
+
+    Ok(condition)
   }
 
   /// Parses a primary expression.
@@ -506,6 +576,7 @@ impl Parser {
       | TokenKind::BitOr => Some(15),
       | TokenKind::And => Some(10),
       | TokenKind::Or => Some(5),
+      | TokenKind::Question => Some(3),
       | kind if kind.is_assignment_op() => Some(1),
       | _ => None,
     }
@@ -786,6 +857,283 @@ mod tests {
         })),
         location: Location::default(),
       })));
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_if_statement() {
+    let actual = parser("if (a) return 42;").statement();
+
+    let expected = Statement::If(If {
+      condition: Box::new(Expression::Var(Ident {
+        value: "a".to_string().into(),
+        location: Location::default(),
+      })),
+      then: Box::new(Statement::Return(Expression::Constant(Int {
+        value: 42,
+        location: Location::default(),
+      }))),
+      otherwise: None,
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_if_else_statement_block() {
+    let actual = parser(indoc! {"
+      if (a > 100)
+        return 0;
+      else if (a > 50)
+        return 1;
+      else
+        return 2;
+    "})
+    .statement();
+
+    let expected = Statement::If(If {
+      condition: Box::new(Expression::Binary(Binary {
+        op: BinaryOp::Greater,
+        left: Box::new(Expression::Var(Ident {
+          value: "a".to_string().into(),
+          location: Location::default(),
+        })),
+        right: Box::new(Expression::Constant(Int {
+          value: 100,
+          location: Location::default(),
+        })),
+        location: Location::default(),
+      })),
+      then: Box::new(Statement::Return(Expression::Constant(Int {
+        value: 0,
+        location: Location::default(),
+      }))),
+      otherwise: Some(Box::new(Statement::If(If {
+        condition: Box::new(Expression::Binary(Binary {
+          op: BinaryOp::Greater,
+          left: Box::new(Expression::Var(Ident {
+            value: "a".to_string().into(),
+            location: Location::default(),
+          })),
+          right: Box::new(Expression::Constant(Int {
+            value: 50,
+            location: Location::default(),
+          })),
+          location: Location::default(),
+        })),
+        then: Box::new(Statement::Return(Expression::Constant(Int {
+          value: 1,
+          location: Location::default(),
+        }))),
+        otherwise: Some(Box::new(Statement::Return(Expression::Constant(Int {
+          value: 2,
+          location: Location::default(),
+        })))),
+        location: Location::default(),
+      }))),
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_if_else_statement_dangling_else() {
+    // By C standard, we parse the program below as the following:
+    //
+    // ```c
+    // if (a) {
+    //   if (a > 10)
+    //     return a;
+    //   else
+    //     return 10 - a;
+    // }
+    // ```
+    let actual = parser(indoc! {"
+      if (a)
+        if (a > 10)
+          return a;
+        else
+          return 10 - a;
+    "})
+    .statement();
+
+    let expected = Statement::If(If {
+      condition: Box::new(Expression::Var(Ident {
+        value: "a".to_string().into(),
+        location: Location::default(),
+      })),
+      then: Box::new(Statement::If(If {
+        condition: Box::new(Expression::Binary(Binary {
+          op: BinaryOp::Greater,
+          left: Box::new(Expression::Var(Ident {
+            value: "a".to_string().into(),
+            location: Location::default(),
+          })),
+          right: Box::new(Expression::Constant(Int {
+            value: 10,
+            location: Location::default(),
+          })),
+          location: Location::default(),
+        })),
+        then: Box::new(Statement::Return(Expression::Var(Ident {
+          value: "a".to_string().into(),
+          location: Location::default(),
+        }))),
+        otherwise: Some(Box::new(Statement::Return(Expression::Binary(Binary {
+          op: BinaryOp::Sub,
+          left: Box::new(Expression::Constant(Int {
+            value: 10,
+            location: Location::default(),
+          })),
+          right: Box::new(Expression::Var(Ident {
+            value: "a".to_string().into(),
+            location: Location::default(),
+          })),
+          location: Location::default(),
+        })))),
+        location: Location::default(),
+      })),
+      otherwise: None,
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_ternary_operator() {
+    let actual = parser("a ? b : c").expression(0);
+
+    let expected = Expression::Ternary(Ternary {
+      condition: Box::new(Expression::Var(Ident {
+        value: "a".to_string().into(),
+        location: Location::default(),
+      })),
+      then: Box::new(Expression::Var(Ident {
+        value: "b".to_string().into(),
+        location: Location::default(),
+      })),
+      otherwise: Box::new(Expression::Var(Ident {
+        value: "c".to_string().into(),
+        location: Location::default(),
+      })),
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_ternary_operator_associativity() {
+    // The program below is equivalent to the following:
+    //
+    // ```c
+    // a ? 1 : (b ? 2 : 3)
+    // ```
+    let actual = parser("a ? 1 : b ? 2 : 3").expression(0);
+
+    let expected = Expression::Ternary(Ternary {
+      // a ? 1 : ...
+      condition: Box::new(Expression::Var(Ident {
+        value: "a".to_string().into(),
+        location: Location::default(),
+      })),
+      then: Box::new(Expression::Constant(Int {
+        value: 1,
+        location: Location::default(),
+      })),
+      // b ? 2 : 3
+      otherwise: Box::new(Expression::Ternary(Ternary {
+        condition: Box::new(Expression::Var(Ident {
+          value: "b".to_string().into(),
+          location: Location::default(),
+        })),
+        then: Box::new(Expression::Constant(Int {
+          value: 2,
+          location: Location::default(),
+        })),
+        otherwise: Box::new(Expression::Constant(Int {
+          value: 3,
+          location: Location::default(),
+        })),
+        location: Location::default(),
+      })),
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_ternary_operator_assignment() {
+    // The program below is equivalent to the following:
+    //
+    // ```c
+    // a = (1 ? 2 : 3)
+    // ```
+    let actual = parser("a = 1 ? 2 : 3;").statement();
+
+    let expected = Statement::Expression(Expression::Assignment(Assignment {
+      left: Box::new(Expression::Var(Ident {
+        value: "a".to_string().into(),
+        location: Location::default(),
+      })),
+      right: Box::new(Expression::Ternary(Ternary {
+        condition: Box::new(Expression::Constant(Int {
+          value: 1,
+          location: Location::default(),
+        })),
+        then: Box::new(Expression::Constant(Int {
+          value: 2,
+          location: Location::default(),
+        })),
+        otherwise: Box::new(Expression::Constant(Int {
+          value: 3,
+          location: Location::default(),
+        })),
+        location: Location::default(),
+      })),
+      location: Location::default(),
+    }));
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_ternary_operator_logical_or() {
+    // The program below is equivalent to the following:
+    //
+    // ```c
+    // (a || b) ? 1 : 0
+    // ```
+    let actual = parser("a || b ? 1 : 0").expression(0);
+
+    let expected = Expression::Ternary(Ternary {
+      condition: Box::new(Expression::Binary(Binary {
+        op: BinaryOp::Or,
+        left: Box::new(Expression::Var(Ident {
+          value: "a".to_string().into(),
+          location: Location::default(),
+        })),
+        right: Box::new(Expression::Var(Ident {
+          value: "b".to_string().into(),
+          location: Location::default(),
+        })),
+        location: Location::default(),
+      })),
+      then: Box::new(Expression::Constant(Int {
+        value: 1,
+        location: Location::default(),
+      })),
+      otherwise: Box::new(Expression::Constant(Int {
+        value: 0,
+        location: Location::default(),
+      })),
+      location: Location::default(),
+    });
 
     assert_eq!(actual, Ok(expected));
   }
