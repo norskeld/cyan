@@ -130,9 +130,7 @@ impl<'ctx> LoweringPass<'ctx> {
 
         Ok(())
       },
-      | ast::Statement::If(_condition) => {
-        todo!("conditional statement")
-      },
+      | ast::Statement::If(conditional) => self.emit_if(conditional, instructions),
       | ast::Statement::Null { .. } => Ok(()),
     }
   }
@@ -152,7 +150,7 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::Expression::Binary(binary) if binary.is_or() => self.emit_or(binary, instructions),
       | ast::Expression::Binary(binary) => self.emit_binary(binary, instructions),
       | ast::Expression::Postfix(postfix) => self.emit_postfix(postfix, instructions),
-      | ast::Expression::Ternary(_ternary) => todo!("ternary expression"),
+      | ast::Expression::Ternary(ternary) => self.emit_ternary(ternary, instructions),
       | ast::Expression::Assignment(assignment) => self.emit_assignment(assignment, instructions),
       | ast::Expression::CompoundAssignment(assignment) => {
         self.emit_compound_assignment(assignment, instructions)
@@ -250,6 +248,90 @@ impl<'ctx> LoweringPass<'ctx> {
     }
   }
 
+  /// Emits instructions for if statements.
+  ///
+  /// For if-else statements, the following TAC sequence is generated:
+  ///
+  /// ```plaintext,ignore
+  /// <condition instructions>
+  /// condition = <condition result>
+  /// JumpIfZero(condition, else_label)
+  /// <then instructions>
+  /// Jump(end_label)
+  /// Label(else_label)
+  /// <else instructions>
+  /// Label(end_label)
+  /// ```
+  ///
+  /// For if statements without else, generates:
+  ///
+  /// ```plaintext,ignore
+  /// <condition instructions>
+  /// condition = <condition result>
+  /// JumpIfZero(condition, end_label)
+  /// <then instructions>
+  /// Label(end_label)
+  /// ```
+  fn emit_if(&mut self, conditional: &ast::If, instructions: &mut Vec<Instruction>) -> Result<()> {
+    match &conditional.otherwise {
+      | Some(otherwise) => {
+        // Separate instruction vectors for each block to maintain evaluation order.
+        let mut condition_instructions = vec![];
+        let mut then_instructions = vec![];
+        let mut otherwise_instructions = vec![];
+
+        // Generate unique labels for branching.
+        let else_label = self.ctx.gen_label("else");
+        let end_label = self.ctx.gen_label("");
+
+        // Generate code for condition and both branches.
+        let condition =
+          self.emit_expression(&conditional.condition, &mut condition_instructions)?;
+
+        self.emit_statement(&conditional.then, &mut then_instructions)?;
+        self.emit_statement(otherwise, &mut otherwise_instructions)?;
+
+        // Combine instructions in proper order with control flow.
+        instructions.extend(condition_instructions);
+        instructions.push(Instruction::JumpIfZero {
+          condition,
+          label: else_label,
+        });
+        instructions.extend(then_instructions);
+        instructions.extend([Instruction::Jump(end_label), Instruction::Label(else_label)]);
+        instructions.extend(otherwise_instructions);
+        instructions.push(Instruction::Label(end_label));
+
+        Ok(())
+      },
+      | None => {
+        // Similar to if-else but without else block.
+        let mut condition_instructions = vec![];
+        let mut then_instructions = vec![];
+
+        // Generate label for branching.
+        let end_label = self.ctx.gen_label("if_end");
+
+        // Generate code for condition and then branch.
+        let condition =
+          self.emit_expression(&conditional.condition, &mut condition_instructions)?;
+
+        self.emit_statement(&conditional.then, &mut then_instructions)?;
+
+        // Combine instructions with control flow.
+        instructions.extend(condition_instructions);
+        instructions.push(Instruction::JumpIfZero {
+          condition,
+          label: end_label,
+        });
+        instructions.extend(then_instructions);
+        instructions.push(Instruction::Label(end_label));
+
+        Ok(())
+      },
+    }
+  }
+
   /// Emits instructions for postfix expressions.
   fn emit_postfix(
     &mut self,
@@ -285,6 +367,72 @@ impl<'ctx> LoweringPass<'ctx> {
         ))
       },
     }
+  }
+
+  /// Emits instructions for the ternary operator (`?:`).
+  ///
+  /// Generates TAC in the following form:
+  ///
+  /// ```plaintext,ignore
+  /// <condition instructions>
+  /// condition = <condition result>
+  /// JumpIfZero(condition, else_label)
+  /// <then instructions>
+  /// then_result = <then result>
+  /// result = then_result
+  /// Jump(end_label)
+  /// Label(else_label)
+  /// <else instructions>
+  /// else_result = <else result>
+  /// result = else_result
+  /// Label(end_label)
+  /// ```
+  fn emit_ternary(
+    &mut self,
+    ternary: &ast::Ternary,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<Value> {
+    // Create separate instruction vectors to maintain evaluation order.
+    let mut condition_instructions = vec![];
+    let mut then_instructions = vec![];
+    let mut otherwise_instructions = vec![];
+
+    // Generate code for all three expressions.
+    let condition = self.emit_expression(&ternary.condition, &mut condition_instructions)?;
+    let then = self.emit_expression(&ternary.then, &mut then_instructions)?;
+    let otherwise = self.emit_expression(&ternary.otherwise, &mut otherwise_instructions)?;
+
+    // Generate labels for control flow.
+    let else_label = self.ctx.gen_label("ternary_else");
+    let end_label = self.ctx.gen_label("ternary_end");
+    let dst = Value::Var(self.ctx.gen_temporary());
+
+    // Emit condition and branch to else block if false.
+    instructions.extend(condition_instructions);
+    instructions.push(Instruction::JumpIfZero {
+      condition,
+      label: else_label,
+    });
+
+    // Emit then block and jump to end.
+    instructions.extend(then_instructions);
+    instructions.extend([
+      Instruction::Copy { src: then, dst },
+      Instruction::Jump(end_label),
+      Instruction::Label(else_label),
+    ]);
+
+    // Emit else block and jump to end.
+    instructions.extend(otherwise_instructions);
+    instructions.extend([
+      Instruction::Copy {
+        src: otherwise,
+        dst,
+      },
+      Instruction::Label(end_label),
+    ]);
+
+    Ok(dst)
   }
 
   /// Emits instructions for the `&&` operator.
