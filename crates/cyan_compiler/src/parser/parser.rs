@@ -303,82 +303,81 @@ impl Parser {
     let mut left = self.factor()?;
     let mut next = self.peek();
 
-    while next.is_binary_op() || next.is_ternary_op() {
-      match Self::precedence(next) {
-        | Some(precedence) if precedence >= min_precedence => {
-          // Handle assignments differently, because unlike other binary operators they are
-          // right-associative, i.e. we need to parse the following:
-          //
-          // a = b = c = d
-          //
-          // as:
-          //
-          // a = (b = (c = d))
-          //
-          // instead of:
-          //
-          // ((a = b) = c) = d
-          if next.is_assignment_op() {
-            let token = self.consume()?;
-            let right = self.expression(precedence)?;
-            let operator = Self::resolve_compound_op(&token)?;
-            let location = Location::merge(left.location(), right.location());
+    while let Some(precedence) = Self::precedence(next) {
+      if precedence >= min_precedence {
+        // Handle assignments differently, because unlike other binary operators they are
+        // right-associative, i.e. we need to parse the following:
+        //
+        // a = b = c = d
+        //
+        // as:
+        //
+        // a = (b = (c = d))
+        //
+        // instead of:
+        //
+        // ((a = b) = c) = d
+        if next.is_assignment_op() {
+          let token = self.consume()?;
+          let right = self.expression(precedence)?;
+          let operator = Self::resolve_compound_op(&token)?;
+          let location = Location::merge(left.location(), right.location());
 
-            left = match operator {
-              | Some(op) => {
-                Expression::CompoundAssignment(CompoundAssignment {
-                  op,
-                  left: Box::new(left),
-                  right: Box::new(right),
-                  location,
-                })
-              },
-              | None => {
-                Expression::Assignment(Assignment {
-                  left: Box::new(left),
-                  right: Box::new(right),
-                  location,
-                })
-              },
-            }
+          left = match operator {
+            | Some(op) => {
+              Expression::CompoundAssignment(CompoundAssignment {
+                op,
+                left: Box::new(left),
+                right: Box::new(right),
+                location,
+              })
+            },
+            | None => {
+              Expression::Assignment(Assignment {
+                left: Box::new(left),
+                right: Box::new(right),
+                location,
+              })
+            },
           }
-          // We special-case ternary operators too.
-          //
-          // This time we perform a trick: we parse the ternary operator almost like as a binary
-          // operator, where the operator in the middle is `"?" <expression> ":"`, i.e. that
-          // operator is delimited by `?` and `:` tokens.
-          //
-          // This way we can assign a precedence relative to other binary operators.
-          else if next.is_ternary_op() {
-            let middle = self.ternary_middle()?;
-            let right = self.expression(precedence)?;
+        }
+        // We special-case ternary operators too.
+        //
+        // This time we perform a trick: we parse the ternary operator almost like as a binary
+        // operator, where the operator in the middle is `"?" <expression> ":"`, i.e. that
+        // operator is delimited by `?` and `:` tokens.
+        //
+        // This way we can assign a precedence relative to other binary operators.
+        else if next.is_ternary_op() {
+          let middle = self.ternary_middle()?;
+          let right = self.expression(precedence)?;
 
-            let location = Location::merge(left.location(), right.location());
+          let location = Location::merge(left.location(), right.location());
 
-            left = Expression::Ternary(Ternary {
-              condition: Box::new(left),
-              then: Box::new(middle),
-              otherwise: Box::new(right),
-              location,
-            })
-          }
-          // Otherwise, we just parse the (left-associative) binary operators.
-          else {
-            let op = self.binary()?;
-            let right = self.expression(precedence + 1)?;
-            let location = Location::merge(left.location(), right.location());
+          left = Expression::Ternary(Ternary {
+            condition: Box::new(left),
+            then: Box::new(middle),
+            otherwise: Box::new(right),
+            location,
+          })
+        }
+        // Otherwise, we just parse the (left-associative) binary operators.
+        else {
+          let op = self.binary()?;
+          let right = self.expression(precedence + 1)?;
+          let location = Location::merge(left.location(), right.location());
 
-            left = Expression::Binary(Binary {
-              op,
-              left: Box::new(left),
-              right: Box::new(right),
-              location,
-            });
-          }
+          left = Expression::Binary(Binary {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
+            location,
+          });
+        }
 
-          next = self.peek();
-        },
-        | _ => break,
+        next = self.peek();
+      } else {
+        break;
       }
     }
 
@@ -561,7 +560,7 @@ impl Parser {
   /// Returns the precedence of the given token. The higher the precedence number, the higher the
   /// binding power.
   ///
-  /// Returns `None` if the token is not a binary operator.
+  /// Returns `None` if the token is not a binary, assignment, or ternary operator.
   fn precedence(token: &Token) -> Option<usize> {
     match token.kind {
       | TokenKind::Mul | TokenKind::Div | TokenKind::Mod => Some(50),
@@ -611,6 +610,7 @@ impl Parser {
     }
   }
 
+  /// Returns the matching postfix operator for the given token.
   fn resolve_postfix_op(token: &Token) -> Result<PostfixOp> {
     match token.kind {
       | TokenKind::Inc => Ok(PostfixOp::Inc),
