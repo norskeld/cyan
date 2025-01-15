@@ -25,20 +25,15 @@ impl ParseError {
 }
 
 pub struct Parser {
-  /// The iterator over tokens.
-  tokens: Box<dyn Iterator<Item = Token>>,
-  /// The last peeked token.
-  peeked: Option<Token>,
+  /// The tokens to parse.
+  tokens: Vec<Token>,
+  /// Current position in token stream.
+  pos: usize,
 }
 
 impl Parser {
   pub fn new(tokens: Vec<Token>) -> Self {
-    let tokens = Box::new(tokens.into_iter());
-
-    Self {
-      tokens,
-      peeked: None,
-    }
+    Self { tokens, pos: 0 }
   }
 
   /// Parses the input and returns the AST.
@@ -49,12 +44,14 @@ impl Parser {
   /// Returns the next token, skipping whitespace and comments.
   fn next(&mut self) -> Token {
     loop {
-      let token = self.peeked.take().unwrap_or_else(|| {
-        self
-          .tokens
-          .next()
-          .unwrap_or_else(|| Token::eof(Location::default()))
-      });
+      if self.pos >= self.tokens.len() {
+        return Token::default();
+      }
+
+      // Move the token out of the vector, replacing it with EOF token.
+      let token = std::mem::replace(&mut self.tokens[self.pos], Token::default());
+
+      self.pos += 1;
 
       match token.kind {
         | TokenKind::Whitespace | TokenKind::Newline => continue,
@@ -63,13 +60,32 @@ impl Parser {
     }
   }
 
-  /// Peeks at the next token advancing to the next token if needed.
-  fn peek(&mut self) -> &Token {
-    if self.peeked.is_none() {
-      self.peeked = Some(self.next());
+  /// Peeks at the next token, skipping whitespace and newlines.
+  fn peek(&self) -> &Token {
+    let mut pos = self.pos;
+
+    while pos < self.tokens.len() {
+      match self.tokens[pos].kind {
+        | TokenKind::Whitespace | TokenKind::Newline => pos += 1,
+        | _ => return &self.tokens[pos],
+      }
     }
 
-    self.peeked.as_ref().expect("should have peeked token")
+    &self.tokens[self.tokens.len() - 1]
+  }
+
+  /// Peeks at the nth token relative to the `pos - 1`, skipping whitespace and newlines.
+  fn peek_at(&self, n: usize) -> &Token {
+    let mut pos = self.pos + n - 1;
+
+    while pos < self.tokens.len() {
+      match self.tokens[pos].kind {
+        | TokenKind::Whitespace | TokenKind::Newline => pos += 1,
+        | _ => return &self.tokens[pos],
+      }
+    }
+
+    &self.tokens[self.tokens.len() - 1]
   }
 
   /// Consumes the next token if it matches the given kind.
@@ -222,11 +238,41 @@ impl Parser {
     let token = self.peek();
 
     match token.kind {
+      | TokenKind::Ident if self.peek_at(2).kind == TokenKind::Colon => self.statement_labeled(),
+      | TokenKind::GotoKw => self.statement_goto(),
       | TokenKind::IfKw => self.statement_if(),
       | TokenKind::ReturnKw => self.statement_return(),
       | TokenKind::Semi => self.statement_null(),
       | _ => self.statement_expression(),
     }
+  }
+
+  /// Parses a goto statement.
+  fn statement_goto(&mut self) -> Result<Statement> {
+    let goto = self.consume()?;
+    let label = self.identifier()?;
+
+    self.expect(TokenKind::Semi)?;
+
+    let location = Location::merge(&goto.location, label.location());
+
+    Ok(Statement::Goto(Goto { label, location }))
+  }
+
+  /// Parses a labeled statement.
+  fn statement_labeled(&mut self) -> Result<Statement> {
+    let label = self.identifier()?;
+
+    self.expect(TokenKind::Colon)?;
+
+    let statement = self.statement().map(Box::new)?;
+    let location = Location::merge(label.location(), statement.location());
+
+    Ok(Statement::Labeled(Labeled {
+      label,
+      statement,
+      location,
+    }))
   }
 
   /// Parses an if statement.
@@ -1130,6 +1176,62 @@ mod tests {
       })),
       otherwise: Box::new(Expression::Constant(Int {
         value: 0,
+        location: Location::default(),
+      })),
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_goto_statement() {
+    let actual = parser("goto foo;").statement();
+
+    let expected = Statement::Goto(Goto {
+      label: Ident {
+        value: "foo".to_string().into(),
+        location: Location::default(),
+      },
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_labeled_statement() {
+    let actual = parser("foo: return 42;").statement();
+
+    let expected = Statement::Labeled(Labeled {
+      label: Ident {
+        value: "foo".to_string().into(),
+        location: Location::default(),
+      },
+      statement: Box::new(Statement::Return(Expression::Constant(Int {
+        value: 42,
+        location: Location::default(),
+      }))),
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_labeled_statement_goto() {
+    let actual = parser("foo: goto bar;").statement();
+
+    let expected = Statement::Labeled(Labeled {
+      label: Ident {
+        value: "foo".to_string().into(),
+        location: Location::default(),
+      },
+      statement: Box::new(Statement::Goto(Goto {
+        label: Ident {
+          value: "bar".to_string().into(),
+          location: Location::default(),
+        },
         location: Location::default(),
       })),
       location: Location::default(),

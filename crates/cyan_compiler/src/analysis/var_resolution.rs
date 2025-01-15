@@ -162,6 +162,8 @@ impl<'ctx> VarResolutionPass<'ctx> {
           location: *location,
         })
       },
+      | Statement::Goto(_goto) => todo!("goto"),
+      | Statement::Labeled(_labeled) => todo!("labeled statements"),
     }
   }
 
