@@ -449,6 +449,7 @@ impl Lexer<'_> {
       | 4 => {
         match value {
           | "else" => TokenKind::ElseKw,
+          | "goto" => TokenKind::GotoKw,
           | "void" => TokenKind::VoidKw,
           | _ => TokenKind::Ident,
         }
@@ -610,6 +611,7 @@ mod tests {
   fn lex_keyword() {
     assert_token!("if", IfKw, "if", 1..1, 1..3);
     assert_token!("else", ElseKw, "else", 1..1, 1..5);
+    assert_token!("goto", GotoKw, "goto", 1..1, 1..5);
     assert_token!("int", IntKw, "int", 1..1, 1..4);
     assert_token!("void", VoidKw, "void", 1..1, 1..5);
     assert_token!("return", ReturnKw, "return", 1..1, 1..7);

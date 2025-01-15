@@ -31,10 +31,25 @@ pub struct Declaration {
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
 pub enum Statement {
+  Goto(Goto),
+  Labeled(Labeled),
   Return(Expression),
   Expression(Expression),
   If(If),
   Null { location: Location },
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Goto {
+  pub label: Ident,
+  pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Labeled {
+  pub label: Ident,
+  pub statement: Box<Statement>,
+  pub location: Location,
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]

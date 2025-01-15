@@ -6,6 +6,7 @@ use cyan_reporting::Location;
 pub enum TokenKind {
   // Keywords.
   ElseKw,
+  GotoKw,
   IfKw,
   IntKw,
   ReturnKw,
@@ -152,6 +153,7 @@ impl TokenKind {
     match self {
       // Keywords.
       | Self::ElseKw => "the 'else' keyword",
+      | Self::GotoKw => "the 'goto' keyword",
       | Self::IfKw => "the 'if' keyword",
       | Self::IntKw => "the 'int' keyword",
       | Self::ReturnKw => "the 'return' keyword",

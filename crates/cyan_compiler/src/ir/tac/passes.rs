@@ -132,6 +132,8 @@ impl<'ctx> LoweringPass<'ctx> {
       },
       | ast::Statement::If(conditional) => self.emit_if(conditional, instructions),
       | ast::Statement::Null { .. } => Ok(()),
+      | ast::Statement::Goto(_goto) => todo!("goto"),
+      | ast::Statement::Labeled(_labeled) => todo!("labeled statements"),
     }
   }
 

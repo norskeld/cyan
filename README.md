@@ -13,7 +13,9 @@ Compiler for a subset of C.
 <declaration> = "int" <identifier> [ "=" <expression> ] ";"
 <statement>   = "return" <expression> ";"
               | <expression> ";"
+              | <identifier> ":" <statement>
               | "if" "(" <expression> ")" <statement> [ "else" <statement> ]
+              | "goto" <identifier> ";"
               | ";"
 <expression>  = <factor>
               | <expression> <binary-op> <expression>
@@ -58,6 +60,8 @@ declaration =
   | Declaration(identifier name, expression? initializer)
 
 statement =
+  | Goto(identifier label)
+  | Labeled(identifier label, statement statement)
   | Return(expression)
   | Expression(expression)
   | If(expression condition, statement then, statement? else)
