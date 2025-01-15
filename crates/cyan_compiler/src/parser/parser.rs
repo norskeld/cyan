@@ -49,7 +49,7 @@ impl Parser {
       }
 
       // Move the token out of the vector, replacing it with EOF token.
-      let token = std::mem::replace(&mut self.tokens[self.pos], Token::default());
+      let token = std::mem::take(&mut self.tokens[self.pos]);
 
       self.pos += 1;
 
