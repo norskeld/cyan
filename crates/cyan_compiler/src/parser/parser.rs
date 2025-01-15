@@ -1,3 +1,5 @@
+use std::mem;
+
 use cyan_reporting::{Located, Location};
 use thiserror::Error;
 
@@ -49,7 +51,7 @@ impl Parser {
       }
 
       // Move the token out of the vector, replacing it with EOF token.
-      let token = std::mem::take(&mut self.tokens[self.pos]);
+      let token = mem::take(&mut self.tokens[self.pos]);
 
       self.pos += 1;
 
