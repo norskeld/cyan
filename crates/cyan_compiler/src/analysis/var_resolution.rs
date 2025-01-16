@@ -7,7 +7,7 @@ use thiserror::Error;
 use crate::context::Context;
 use crate::ir::ast::*;
 
-pub type Result<T> = std::result::Result<T, VarResolutionError>;
+type Result<T> = std::result::Result<T, VarResolutionError>;
 
 /// A mapping from the user-defined variable names to the unique names to be used later.
 pub type VarMap = HashMap<Intern<String>, Intern<String>>;
@@ -162,8 +162,18 @@ impl<'ctx> VarResolutionPass<'ctx> {
           location: *location,
         })
       },
-      | Statement::Goto(_goto) => todo!("goto"),
-      | Statement::Labeled(_labeled) => todo!("labeled statements"),
+      | Statement::Goto(goto) => Ok(Statement::Goto(*goto)),
+      | Statement::Labeled(labeled) => {
+        let statement = self
+          .resolve_statement(&labeled.statement, variables)
+          .map(Box::new)?;
+
+        Ok(Statement::Labeled(Labeled {
+          statement,
+          label: labeled.label,
+          location: labeled.location,
+        }))
+      },
     }
   }
 
