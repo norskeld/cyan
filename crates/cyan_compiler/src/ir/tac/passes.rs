@@ -131,9 +131,9 @@ impl<'ctx> LoweringPass<'ctx> {
         Ok(())
       },
       | ast::Statement::If(conditional) => self.emit_if(conditional, instructions),
+      | ast::Statement::Goto(goto) => self.emit_goto(goto, instructions),
+      | ast::Statement::Labeled(labeled) => self.emit_labeled(labeled, instructions),
       | ast::Statement::Null { .. } => Ok(()),
-      | ast::Statement::Goto(_goto) => todo!("goto"),
-      | ast::Statement::Labeled(_labeled) => todo!("labeled statements"),
     }
   }
 
@@ -332,6 +332,24 @@ impl<'ctx> LoweringPass<'ctx> {
         Ok(())
       },
     }
+  }
+
+  /// Emits instructions for goto statements.
+  fn emit_goto(&mut self, goto: &ast::Goto, instructions: &mut Vec<Instruction>) -> Result<()> {
+    instructions.push(Instruction::Jump(goto.label.value));
+
+    Ok(())
+  }
+
+  /// Emits instructions for labeled statements.
+  fn emit_labeled(
+    &mut self,
+    labeled: &ast::Labeled,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<()> {
+    instructions.push(Instruction::Label(labeled.label.value));
+
+    self.emit_statement(&labeled.statement, instructions)
   }
 
   /// Emits instructions for postfix expressions.
