@@ -1,5 +1,8 @@
 //! AST definition.
 
+use std::fmt;
+use std::hash::{Hash, Hasher};
+
 use cyan_reporting::{Located, Location};
 use internment::Intern;
 
@@ -39,7 +42,7 @@ pub enum Statement {
   Null { location: Location },
 }
 
-#[derive(Clone, Debug, Located, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]
 pub struct Goto {
   pub label: Ident,
   pub location: Location,
@@ -176,8 +179,26 @@ pub struct Int {
   pub location: Location,
 }
 
-#[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Located, Eq)]
 pub struct Ident {
   pub value: Intern<String>,
   pub location: Location,
+}
+
+impl PartialEq<Ident> for Ident {
+  fn eq(&self, other: &Ident) -> bool {
+    self.value == other.value
+  }
+}
+
+impl Hash for Ident {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.value.hash(state);
+  }
+}
+
+impl fmt::Display for Ident {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", self.value)
+  }
 }
