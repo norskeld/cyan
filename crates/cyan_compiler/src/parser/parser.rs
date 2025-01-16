@@ -62,32 +62,24 @@ impl Parser {
     }
   }
 
-  /// Peeks at the next token, skipping whitespace and newlines.
-  fn peek(&self) -> &Token {
+  /// Peeks at the `n`th token relative the current position, skipping whitespace and newlines.
+  fn peek(&self, mut n: usize) -> &Token {
     let mut pos = self.pos;
 
     while pos < self.tokens.len() {
+      // Here `n` acts like as the logical offset, decrementing only when a non-whitespace or
+      // newline token is encountered.
       match self.tokens[pos].kind {
         | TokenKind::Whitespace | TokenKind::Newline => pos += 1,
-        | _ => return &self.tokens[pos],
+        | _ if n <= 1 => return &self.tokens[pos],
+        | _ => {
+          n -= 1;
+          pos += 1;
+        },
       }
     }
 
-    &self.tokens[self.tokens.len() - 1]
-  }
-
-  /// Peeks at the nth token relative to the `pos - 1`, skipping whitespace and newlines.
-  fn peek_at(&self, n: usize) -> &Token {
-    let mut pos = self.pos + n - 1;
-
-    while pos < self.tokens.len() {
-      match self.tokens[pos].kind {
-        | TokenKind::Whitespace | TokenKind::Newline => pos += 1,
-        | _ => return &self.tokens[pos],
-      }
-    }
-
-    &self.tokens[self.tokens.len() - 1]
+    &self.tokens[self.tokens.len().saturating_sub(1)]
   }
 
   /// Consumes the next token if it matches the given kind.
@@ -168,7 +160,7 @@ impl Parser {
 
     let mut body = Vec::new();
 
-    while self.peek().kind != TokenKind::BraceClose {
+    while self.peek(1).kind != TokenKind::BraceClose {
       body.push(self.block_item()?);
     }
 
@@ -184,7 +176,7 @@ impl Parser {
 
   /// Parses a block item.
   fn block_item(&mut self) -> Result<BlockItem> {
-    let token = self.peek();
+    let token = self.peek(1);
 
     match token.kind {
       | TokenKind::IntKw => Ok(BlockItem::Declaration(self.declaration()?)),
@@ -197,7 +189,7 @@ impl Parser {
     let start = self.expect(TokenKind::IntKw)?;
     let name = self.identifier()?;
 
-    let next = self.peek();
+    let next = self.peek(1);
 
     match next.kind {
       | TokenKind::Assign => {
@@ -237,10 +229,10 @@ impl Parser {
 
   /// Parses a statement.
   fn statement(&mut self) -> Result<Statement> {
-    let token = self.peek();
+    let token = self.peek(1);
 
     match token.kind {
-      | TokenKind::Ident if self.peek_at(2).kind == TokenKind::Colon => self.statement_labeled(),
+      | TokenKind::Ident if self.peek(2).kind == TokenKind::Colon => self.statement_labeled(),
       | TokenKind::GotoKw => self.statement_goto(),
       | TokenKind::IfKw => self.statement_if(),
       | TokenKind::ReturnKw => self.statement_return(),
@@ -291,7 +283,7 @@ impl Parser {
     let then = self.statement().map(Box::new)?;
 
     // Parse the optional `else` branch.
-    let otherwise = match self.peek().kind {
+    let otherwise = match self.peek(1).kind {
       | TokenKind::ElseKw => {
         self.consume()?;
         let otherwise = self.statement().map(Box::new)?;
@@ -349,7 +341,7 @@ impl Parser {
   /// Parses an expression.
   fn expression(&mut self, min_precedence: usize) -> Result<Expression> {
     let mut left = self.factor()?;
-    let mut next = self.peek();
+    let mut next = self.peek(1);
 
     while let Some(precedence) = Self::precedence(next) {
       if precedence >= min_precedence {
@@ -423,7 +415,7 @@ impl Parser {
           });
         }
 
-        next = self.peek();
+        next = self.peek(1);
       } else {
         break;
       }
@@ -434,7 +426,7 @@ impl Parser {
 
   /// Parses a factor expression.
   fn factor(&mut self) -> Result<Expression> {
-    if self.peek().is_unary_op() {
+    if self.peek(1).is_unary_op() {
       self.unary()
     } else {
       self.postfix()
@@ -445,7 +437,7 @@ impl Parser {
   fn postfix(&mut self) -> Result<Expression> {
     let mut primary = self.primary()?;
 
-    while self.peek().is_postfix_op() {
+    while self.peek(1).is_postfix_op() {
       let token = self.consume()?;
 
       let op = Self::resolve_postfix_op(&token)?;
@@ -472,7 +464,7 @@ impl Parser {
 
   /// Parses a primary expression.
   fn primary(&mut self) -> Result<Expression> {
-    let token = self.peek();
+    let token = self.peek(1);
 
     match token.kind {
       | TokenKind::Int => self.constant(),
@@ -1216,6 +1208,67 @@ mod tests {
       }))),
       location: Location::default(),
     });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_labeled_statement_progam() {
+    let actual = parser(indoc! {"
+      int main(void) {
+        int x = 0;
+      foo:
+        x = 1;
+        return x;
+      }
+    "})
+    .parse();
+
+    let expected = Program {
+      function: Function {
+        name: Ident {
+          value: "main".to_string().into(),
+          location: Location::default(),
+        },
+        body: vec![
+          BlockItem::Declaration(Declaration {
+            name: Ident {
+              value: "x".to_string().into(),
+              location: Location::default(),
+            },
+            initializer: Some(Expression::Constant(Int {
+              value: 0,
+              location: Location::default(),
+            })),
+            location: Location::default(),
+          }),
+          BlockItem::Statement(Statement::Labeled(Labeled {
+            label: Ident {
+              value: "foo".to_string().into(),
+              location: Location::default(),
+            },
+            statement: Box::new(Statement::Expression(Expression::Assignment(Assignment {
+              left: Box::new(Expression::Var(Ident {
+                value: "x".to_string().into(),
+                location: Location::default(),
+              })),
+              right: Box::new(Expression::Constant(Int {
+                value: 1,
+                location: Location::default(),
+              })),
+              location: Location::default(),
+            }))),
+            location: Location::default(),
+          })),
+          BlockItem::Statement(Statement::Return(Expression::Var(Ident {
+            value: "x".to_string().into(),
+            location: Location::default(),
+          }))),
+        ],
+        location: Location::default(),
+      },
+      location: Location::default(),
+    };
 
     assert_eq!(actual, Ok(expected));
   }
