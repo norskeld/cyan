@@ -167,15 +167,18 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   bail_on!(options, CompileStage::Parse);
 
   // -----------------------------------------------------------------------------------------------
-  // Verify:
+  // Verify and resolve labels:
 
   let mut ctx = context::Context::new();
 
   let mut pass = analysis::VarResolutionPass::new(&mut ctx);
   let ast = pass.run(&ast)?;
 
+  let pass = analysis::LabelsResolutionPass::new();
+  pass.run(&ast)?;
+
   if options.should_print(CompileStage::Verify) {
-    println!("{}", boxed("Stage | Variable resolution (AST)"));
+    println!("{}", boxed("Stage | Verify (AST)"));
     println!("{ast:#?}\n");
   }
 
