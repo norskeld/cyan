@@ -67,7 +67,7 @@ impl Parser {
     let mut pos = self.pos;
 
     while pos < self.tokens.len() {
-      // Here `n` acts like as the logical offset, decrementing only when a non-whitespace or
+      // Here `n` acts as the logical offset, decrementing only when a non-whitespace or
       // newline token is encountered.
       match self.tokens[pos].kind {
         | TokenKind::Whitespace | TokenKind::Newline => pos += 1,

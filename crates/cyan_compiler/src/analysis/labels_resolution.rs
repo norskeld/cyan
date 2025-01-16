@@ -68,9 +68,6 @@ impl LabelsResolutionPass {
 
     let diff = state.diff();
 
-    dbg!(&state);
-    dbg!(&diff);
-
     // TODO: When diagnostics are implemented, we should report _all_ errors.
     if let Some(ident) = diff.and_then(|it| it.first().cloned()) {
       Err(LabelsResolutionError::new(
