@@ -156,7 +156,20 @@ impl Parser {
     self.expect(TokenKind::ParenOpen)?;
     self.expect(TokenKind::VoidKw)?;
     self.expect(TokenKind::ParenClose)?;
-    self.expect(TokenKind::BraceOpen)?;
+
+    let body = self.block()?;
+    let location = Location::merge(&start.location, &body.location);
+
+    Ok(Function {
+      name,
+      body,
+      location,
+    })
+  }
+
+  /// Parses a block.
+  fn block(&mut self) -> Result<Block> {
+    let open = self.expect(TokenKind::BraceOpen)?;
 
     let mut body = Vec::new();
 
@@ -165,13 +178,9 @@ impl Parser {
     }
 
     let close = self.expect(TokenKind::BraceClose)?;
-    let location = Location::merge(&start.location, &close.location);
+    let location = Location::merge(&open.location, &close.location);
 
-    Ok(Function {
-      name,
-      body,
-      location,
-    })
+    Ok(Block { body, location })
   }
 
   /// Parses a block item.
@@ -233,9 +242,10 @@ impl Parser {
 
     match token.kind {
       | TokenKind::Ident if self.peek(2).kind == TokenKind::Colon => self.statement_labeled(),
-      | TokenKind::GotoKw => self.statement_goto(),
       | TokenKind::IfKw => self.statement_if(),
+      | TokenKind::GotoKw => self.statement_goto(),
       | TokenKind::ReturnKw => self.statement_return(),
+      | TokenKind::BraceOpen => self.statement_block(),
       | TokenKind::Semi => self.statement_null(),
       | _ => self.statement_expression(),
     }
@@ -327,6 +337,13 @@ impl Parser {
     self.expect(TokenKind::Semi)?;
 
     Ok(Statement::Expression(expression))
+  }
+
+  /// Parses a block statement.
+  fn statement_block(&mut self) -> Result<Statement> {
+    let block = self.block()?;
+
+    Ok(Statement::Block(block))
   }
 
   /// Parses a 'null statement', i.e. semicolon.
@@ -703,80 +720,83 @@ mod tests {
           value: "main".to_string().into(),
           location: Location::default(),
         },
-        body: vec![
-          BlockItem::Declaration(Declaration {
-            name: Ident {
-              value: "a".to_string().into(),
-              location: Location::default(),
-            },
-            initializer: Some(Expression::Constant(Int {
-              value: 21,
-              location: Location::default(),
-            })),
-            location: Location::default(),
-          }),
-          BlockItem::Declaration(Declaration {
-            name: Ident {
-              value: "b".to_string().into(),
-              location: Location::default(),
-            },
-            initializer: Some(Expression::Constant(Int {
-              value: 42,
-              location: Location::default(),
-            })),
-            location: Location::default(),
-          }),
-          BlockItem::Declaration(Declaration {
-            name: Ident {
-              value: "c".to_string().into(),
-              location: Location::default(),
-            },
-            initializer: None,
-            location: Location::default(),
-          }),
-          BlockItem::Statement(Statement::Expression(Expression::Assignment(Assignment {
-            left: Box::new(Expression::Var(Ident {
-              value: "b".to_string().into(),
-              location: Location::default(),
-            })),
-            right: Box::new(Expression::Binary(Binary {
-              op: BinaryOp::Div,
-              left: Box::new(Expression::Var(Ident {
-                value: "b".to_string().into(),
-                location: Location::default(),
-              })),
-              right: Box::new(Expression::Constant(Int {
-                value: 2,
-                location: Location::default(),
-              })),
-              location: Location::default(),
-            })),
-            location: Location::default(),
-          }))),
-          BlockItem::Statement(Statement::Expression(Expression::Assignment(Assignment {
-            left: Box::new(Expression::Var(Ident {
-              value: "c".to_string().into(),
-              location: Location::default(),
-            })),
-            right: Box::new(Expression::Binary(Binary {
-              op: BinaryOp::Add,
-              left: Box::new(Expression::Var(Ident {
+        body: Block {
+          body: vec![
+            BlockItem::Declaration(Declaration {
+              name: Ident {
                 value: "a".to_string().into(),
                 location: Location::default(),
-              })),
-              right: Box::new(Expression::Var(Ident {
-                value: "b".to_string().into(),
+              },
+              initializer: Some(Expression::Constant(Int {
+                value: 21,
                 location: Location::default(),
               })),
               location: Location::default(),
-            })),
-            location: Location::default(),
-          }))),
-          BlockItem::Statement(Statement::Return(Expression::Var(Ident {
-            value: "c".to_string().into(),
-            location: Location::default(),
-          }))),
-        ],
+            }),
+            BlockItem::Declaration(Declaration {
+              name: Ident {
+                value: "b".to_string().into(),
+                location: Location::default(),
+              },
+              initializer: Some(Expression::Constant(Int {
+                value: 42,
+                location: Location::default(),
+              })),
+              location: Location::default(),
+            }),
+            BlockItem::Declaration(Declaration {
+              name: Ident {
+                value: "c".to_string().into(),
+                location: Location::default(),
+              },
+              initializer: None,
+              location: Location::default(),
+            }),
+            BlockItem::Statement(Statement::Expression(Expression::Assignment(Assignment {
+              left: Box::new(Expression::Var(Ident {
+                value: "b".to_string().into(),
+                location: Location::default(),
+              })),
+              right: Box::new(Expression::Binary(Binary {
+                op: BinaryOp::Div,
+                left: Box::new(Expression::Var(Ident {
+                  value: "b".to_string().into(),
+                  location: Location::default(),
+                })),
+                right: Box::new(Expression::Constant(Int {
+                  value: 2,
+                  location: Location::default(),
+                })),
+                location: Location::default(),
+              })),
+              location: Location::default(),
+            }))),
+            BlockItem::Statement(Statement::Expression(Expression::Assignment(Assignment {
+              left: Box::new(Expression::Var(Ident {
+                value: "c".to_string().into(),
+                location: Location::default(),
+              })),
+              right: Box::new(Expression::Binary(Binary {
+                op: BinaryOp::Add,
+                left: Box::new(Expression::Var(Ident {
+                  value: "a".to_string().into(),
+                  location: Location::default(),
+                })),
+                right: Box::new(Expression::Var(Ident {
+                  value: "b".to_string().into(),
+                  location: Location::default(),
+                })),
+                location: Location::default(),
+              })),
+              location: Location::default(),
+            }))),
+            BlockItem::Statement(Statement::Return(Expression::Var(Ident {
+              value: "c".to_string().into(),
+              location: Location::default(),
+            }))),
+          ],
+          location: Location::default(),
+        },
         location: Location::default(),
       },
       location: Location::default(),
@@ -1230,41 +1250,44 @@ mod tests {
           value: "main".to_string().into(),
           location: Location::default(),
         },
-        body: vec![
-          BlockItem::Declaration(Declaration {
-            name: Ident {
-              value: "x".to_string().into(),
-              location: Location::default(),
-            },
-            initializer: Some(Expression::Constant(Int {
-              value: 0,
-              location: Location::default(),
-            })),
-            location: Location::default(),
-          }),
-          BlockItem::Statement(Statement::Labeled(Labeled {
-            label: Ident {
-              value: "foo".to_string().into(),
-              location: Location::default(),
-            },
-            statement: Box::new(Statement::Expression(Expression::Assignment(Assignment {
-              left: Box::new(Expression::Var(Ident {
+        body: Block {
+          body: vec![
+            BlockItem::Declaration(Declaration {
+              name: Ident {
                 value: "x".to_string().into(),
                 location: Location::default(),
-              })),
-              right: Box::new(Expression::Constant(Int {
-                value: 1,
+              },
+              initializer: Some(Expression::Constant(Int {
+                value: 0,
                 location: Location::default(),
               })),
               location: Location::default(),
+            }),
+            BlockItem::Statement(Statement::Labeled(Labeled {
+              label: Ident {
+                value: "foo".to_string().into(),
+                location: Location::default(),
+              },
+              statement: Box::new(Statement::Expression(Expression::Assignment(Assignment {
+                left: Box::new(Expression::Var(Ident {
+                  value: "x".to_string().into(),
+                  location: Location::default(),
+                })),
+                right: Box::new(Expression::Constant(Int {
+                  value: 1,
+                  location: Location::default(),
+                })),
+                location: Location::default(),
+              }))),
+              location: Location::default(),
+            })),
+            BlockItem::Statement(Statement::Return(Expression::Var(Ident {
+              value: "x".to_string().into(),
+              location: Location::default(),
             }))),
-            location: Location::default(),
-          })),
-          BlockItem::Statement(Statement::Return(Expression::Var(Ident {
-            value: "x".to_string().into(),
-            location: Location::default(),
-          }))),
-        ],
+          ],
+          location: Location::default(),
+        },
         location: Location::default(),
       },
       location: Location::default(),
@@ -1514,7 +1537,10 @@ mod tests {
         value: "main".to_string().into(),
         location: Location::default(),
       },
-      body: vec![],
+      body: Block {
+        body: vec![],
+        location: Location::default(),
+      },
       location: Location::default(),
     };
 

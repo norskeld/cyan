@@ -57,9 +57,7 @@ impl<'ctx> LoweringPass<'ctx> {
 
     let mut instructions = Vec::new();
 
-    for block_item in &function.body {
-      self.emit_block_item(block_item, &mut instructions)?;
-    }
+    self.emit_block(&function.body, &mut instructions)?;
 
     // Shove a return instruction at the end of the function.
     instructions.push(Instruction::Return(Value::Constant(0)));
@@ -68,6 +66,15 @@ impl<'ctx> LoweringPass<'ctx> {
       name: function.name.value,
       instructions,
     })
+  }
+
+  /// Emits instructions for blocks.
+  fn emit_block(&mut self, block: &ast::Block, instructions: &mut Vec<Instruction>) -> Result<()> {
+    for block_item in &block.body {
+      self.emit_block_item(block_item, instructions)?;
+    }
+
+    Ok(())
   }
 
   /// Emits instructions for block item.
@@ -133,6 +140,7 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::Statement::If(conditional) => self.emit_if(conditional, instructions),
       | ast::Statement::Goto(goto) => self.emit_goto(goto, instructions),
       | ast::Statement::Labeled(labeled) => self.emit_labeled(labeled, instructions),
+      | ast::Statement::Block(block) => self.emit_block(block, instructions),
       | ast::Statement::Null { .. } => Ok(()),
     }
   }
