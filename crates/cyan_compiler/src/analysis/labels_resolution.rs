@@ -62,9 +62,7 @@ impl LabelsResolutionPass {
   fn resolve_function(&self, function: &Function) -> Result<()> {
     let mut state = LabelsResolutionState::default();
 
-    for block_item in &function.body {
-      self.resolve_block_item(block_item, &mut state)?;
-    }
+    self.resolve_block(&function.body, &mut state)?;
 
     let diff = state.diff();
 
@@ -77,6 +75,14 @@ impl LabelsResolutionPass {
     } else {
       Ok(())
     }
+  }
+
+  fn resolve_block(&self, block: &Block, state: &mut LabelsResolutionState) -> Result<()> {
+    for block_item in &block.body {
+      self.resolve_block_item(block_item, state)?;
+    }
+
+    Ok(())
   }
 
   fn resolve_block_item(
@@ -99,6 +105,7 @@ impl LabelsResolutionPass {
       | Statement::Goto(goto) => self.resolve_goto(goto, state),
       | Statement::Labeled(labeled) => self.resolve_labeled(labeled, state),
       | Statement::If(conditional) => self.resolve_if(conditional, state),
+      | Statement::Block(block) => self.resolve_block(block, state),
       | Statement::Expression(..) | Statement::Return(..) | Statement::Null { .. } => Ok(()),
     }
   }

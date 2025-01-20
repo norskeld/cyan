@@ -8,7 +8,8 @@ Compiler for a subset of C.
 
 ```ebnf
 <program>     = <function>
-<function>    = "int" <identifier> "(" "void" ")" "{" { <block-item> } "}"
+<function>    = "int" <identifier> "(" "void" ")" <block>
+<block>       = "{" { <block-item> } "}"
 <block-item>  = <declaration> | <statement>
 <declaration> = "int" <identifier> [ "=" <expression> ] ";"
 <statement>   = "return" <expression> ";"
@@ -16,6 +17,7 @@ Compiler for a subset of C.
               | <identifier> ":" <statement>
               | "if" "(" <expression> ")" <statement> [ "else" <statement> ]
               | "goto" <identifier> ";"
+              | <block>
               | ";"
 <expression>  = <factor>
               | <expression> <binary-op> <expression>
@@ -50,7 +52,10 @@ This is a syntax tree representation of a C program.
 program = Program(function function)
 
 function =
-  | Function(identifier name, block_item* body)
+  | Function(identifier name, block body)
+
+block =
+  | Block(block_item*)
 
 block_item =
   | Declaration(declaration)
@@ -65,6 +70,7 @@ statement =
   | Return(expression)
   | Expression(expression)
   | If(expression condition, statement then, statement? else)
+  | Compound(block)
   | Null
 
 expression =

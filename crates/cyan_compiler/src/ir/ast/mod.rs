@@ -15,17 +15,23 @@ pub struct Program {
 #[derive(Debug, Located, PartialEq, Eq)]
 pub struct Function {
   pub name: Ident,
+  pub body: Block,
+  pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Block {
   pub body: Vec<BlockItem>,
   pub location: Location,
 }
 
-#[derive(Debug, Located, PartialEq, Eq)]
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
 pub enum BlockItem {
   Declaration(Declaration),
   Statement(Statement),
 }
 
-#[derive(Debug, Located, PartialEq, Eq)]
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
 pub struct Declaration {
   pub name: Ident,
   pub initializer: Option<Expression>,
@@ -39,6 +45,7 @@ pub enum Statement {
   Return(Expression),
   Expression(Expression),
   If(If),
+  Block(Block),
   Null { location: Location },
 }
 

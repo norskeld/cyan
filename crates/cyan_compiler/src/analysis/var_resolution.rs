@@ -1,4 +1,4 @@
-use std::collections::hash_map::{Entry, HashMap};
+use std::collections::hash_map::HashMap;
 
 use cyan_reporting::{Located, Location};
 use internment::Intern;
@@ -10,7 +10,31 @@ use crate::ir::ast::*;
 type Result<T> = std::result::Result<T, VarResolutionError>;
 
 /// A mapping from the user-defined variable names to the unique names to be used later.
-pub type VarMap = HashMap<Intern<String>, Intern<String>>;
+pub type VarMap = HashMap<Intern<String>, VarEntry>;
+
+trait VarMapExt {
+  /// Copies the variable map and returns a new one with `local` resetted to `false`.
+  fn fresh(&self) -> Self;
+}
+
+impl VarMapExt for VarMap {
+  fn fresh(&self) -> VarMap {
+    self
+      .clone()
+      .into_iter()
+      .map(|(k, v)| (k, VarEntry { local: false, ..v }))
+      .collect()
+  }
+}
+
+/// A variable entry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VarEntry {
+  /// The unique name of the variable.
+  pub name: Intern<String>,
+  /// Whether the variable is local to the current block scope.
+  pub local: bool,
+}
 
 #[derive(Debug, Error)]
 #[error("variable resolution error {location}: {message}")]
@@ -53,20 +77,30 @@ impl<'ctx> VarResolutionPass<'ctx> {
   }
 
   fn resolve_function(&mut self, function: &Function) -> Result<Function> {
-    let mut variables: VarMap = HashMap::new();
-    let mut body = Vec::new();
+    let mut variables = VarMap::new();
 
     // Set the prefix for temporary variables to current function's name.
     self.ctx.var_prefix = function.name.value;
 
-    for block_item in &function.body {
-      body.push(self.resolve_block_item(block_item, &mut variables)?);
-    }
+    let body = self.resolve_block(&function.body, &mut variables)?;
 
     Ok(Function {
       name: function.name,
       body,
       location: function.location,
+    })
+  }
+
+  fn resolve_block(&mut self, block: &Block, variables: &mut VarMap) -> Result<Block> {
+    let mut body = Vec::new();
+
+    for block_item in &block.body {
+      body.push(self.resolve_block_item(block_item, variables)?);
+    }
+
+    Ok(Block {
+      body,
+      location: block.location,
     })
   }
 
@@ -94,35 +128,49 @@ impl<'ctx> VarResolutionPass<'ctx> {
     declaration: &Declaration,
     variables: &mut VarMap,
   ) -> Result<Declaration> {
-    if let Entry::Vacant(entry) = variables.entry(declaration.name.value) {
-      // Generate unique name and associate a user-defined name with it.
-      let unique_name = self.ctx.gen_label(&declaration.name.value);
-      entry.insert(unique_name);
+    match variables.get(&declaration.name.value) {
+      | Some(entry) if entry.local => {
+        Err(VarResolutionError::new(
+          "duplicate variable declaration",
+          declaration.name.location,
+        ))
+      },
+      | _ => {
+        // Generate unique name and associate a user-defined name with it.
+        let unique_name = self.ctx.gen_temporary();
 
-      // Resolve initializer if there is one.
-      let resolved_init = declaration
-        .initializer
-        .as_ref()
-        .map(|init| self.resolve_expression(init, variables))
-        .transpose()?;
+        variables.insert(
+          declaration.name.value,
+          VarEntry {
+            name: unique_name,
+            local: true,
+          },
+        );
 
-      Ok(Declaration {
-        name: Ident {
-          value: unique_name,
-          location: declaration.name.location, // FIXME: This is probably incorrect.
-        },
-        initializer: resolved_init,
-        location: declaration.location,
-      })
-    } else {
-      Err(VarResolutionError::new(
-        "duplicate variable declaration",
-        declaration.name.location,
-      ))
+        // Resolve initializer if there is one.
+        let resolved_init = declaration
+          .initializer
+          .as_ref()
+          .map(|init| self.resolve_expression(init, variables))
+          .transpose()?;
+
+        Ok(Declaration {
+          name: Ident {
+            value: unique_name,
+            location: declaration.name.location, // FIXME: This is probably incorrect.
+          },
+          initializer: resolved_init,
+          location: declaration.location,
+        })
+      },
     }
   }
 
-  fn resolve_statement(&self, statement: &Statement, variables: &mut VarMap) -> Result<Statement> {
+  fn resolve_statement(
+    &mut self,
+    statement: &Statement,
+    variables: &mut VarMap,
+  ) -> Result<Statement> {
     match statement {
       | Statement::Return(expression) => {
         self
@@ -162,6 +210,15 @@ impl<'ctx> VarResolutionPass<'ctx> {
           location: *location,
         })
       },
+      | Statement::Block(block) => {
+        let mut fresh_variables = variables.fresh();
+        let block = self.resolve_block(block, &mut fresh_variables)?;
+
+        Ok(Statement::Block(Block {
+          body: block.body,
+          location: block.location,
+        }))
+      },
       | Statement::Goto(goto) => Ok(Statement::Goto(*goto)),
       | Statement::Labeled(labeled) => {
         let statement = self
@@ -186,9 +243,9 @@ impl<'ctx> VarResolutionPass<'ctx> {
     match expression {
       | Expression::Constant(int) => Ok(Expression::Constant(*int)),
       | Expression::Var(ident) => {
-        if let Some(name) = variables.get(&ident.value) {
+        if let Some(entry) = variables.get(&ident.value) {
           Ok(Expression::Var(Ident {
-            value: *name,
+            value: entry.name,
             location: ident.location,
           }))
         } else {
