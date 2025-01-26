@@ -2,9 +2,87 @@
 
 [![Checks](https://img.shields.io/github/actions/workflow/status/norskeld/cyan/checks.yml?style=flat-square&colorA=22272d&colorB=22272d&label=checks)](https://github.com/norskeld/cyan/actions/workflows/checks.yml)
 
-Compiler for a subset of C.
+C-to-Assembly (x86-64) compiler for a basic subset of C.
+
+## Why
+
+Simply to learn more about compilers, assembly, and how _not to_ design languages. :)
+
+## Features
+
+If something is missing in the list below, then it's not planned to be implemented.
+
+- [x] Operators:
+  - [x] Unary:
+    - [x] Prefix (`--`, `++`, `!`, `~`, `-`)
+    - [x] Postfix (`--`, `++`)
+  - [x] Binary
+    - [x] Arithmetic (`+`, `-`, `*`, `/`, `%`)
+    - [x] Bitwise (`&`, `|`, `^`, `<<`, `>>`)
+  - [x] Logical (`!`, `&&`, `||`)
+  - [x] Relational (`<`, `<=`, `>`, `>=`, `==`, `!=`)
+- [x] Local variables:
+  - [x] Declaration
+  - [x] Assignments
+  - [x] Compound assignments (`+=`, `-=`, etc.)
+  - [x] Scopes
+- [ ] Storage-class specifiers:
+  - [ ] `static`
+  - [ ] `extern`
+  - [ ] `typedef`
+- [ ] Conditionals and control flow:
+  - [x] If statements
+  - [x] Ternary expressions
+  - [x] Labeled statements
+  - [ ] Switch statements
+  - [x] `goto` statements
+  - [ ] `break` and `continue`
+- [ ] Loops:
+  - [ ] For loops
+  - [ ] While loops
+  - [ ] Do-while loops
+- [ ] Functions:
+  - [ ] Function declarations
+  - [ ] Function definitions
+  - [ ] Function calls
+- [ ] Types:
+  - [ ] `void`
+  - [x] `int`
+  - [ ] `long`
+  - [ ] `unsigned int`
+  - [ ] `unsigned long`
+  - [ ] `double`
+  - [ ] `char`
+  - [ ] `signed char`
+  - [ ] `unsigned char`
+  - [ ] Structs
+  - [ ] Unions
+  - [ ] Pointers
+  - [ ] Pointer arithmetic
+  - [ ] Arrays
+- [ ] Memory management:
+  - [ ] `sizeof` operator
+  - [ ] `malloc`
+  - [ ] `calloc`
+  - [ ] `realloc`
+  - [ ] `aligned_alloc`
+  - [ ] `free`
+
+Optimizations:
+
+- [ ] Constant folding
+- [ ] Dead code elimination
+- [ ] Dead store elimination
+- [ ] Copy propagation
+- [ ] Register allocation
+- [ ] Register coalescing
 
 ## Grammar
+
+Defined using EBNF-like notation.
+
+<details>
+<summary>Definition</summary>
 
 ```ebnf
 <program>     = <function>
@@ -35,6 +113,7 @@ Compiler for a subset of C.
 <identifier>  = ? An identifier token ?
 <int>         = ? A constant token ?
 ```
+</details>
 
 ## Trees and IRs
 
