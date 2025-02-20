@@ -243,11 +243,125 @@ impl Parser {
     match token.kind {
       | TokenKind::Ident if self.peek(2).kind == TokenKind::Colon => self.statement_labeled(),
       | TokenKind::IfKw => self.statement_if(),
+      | TokenKind::BreakKw => self.statement_break(),
+      | TokenKind::ContinueKw => self.statement_continue(),
+      | TokenKind::DoKw => self.statement_do_while(),
+      | TokenKind::WhileKw => self.statement_while(),
+      | TokenKind::ForKw => self.statement_for(),
       | TokenKind::GotoKw => self.statement_goto(),
       | TokenKind::ReturnKw => self.statement_return(),
       | TokenKind::BraceOpen => self.statement_block(),
       | TokenKind::Semi => self.statement_null(),
       | _ => self.statement_expression(),
+    }
+  }
+
+  /// Parses a break statement.
+  fn statement_break(&mut self) -> Result<Statement> {
+    let token = self.consume()?;
+
+    self.expect(TokenKind::Semi)?;
+
+    Ok(Statement::Break(Break {
+      label: None,
+      location: token.location,
+    }))
+  }
+
+  /// Parses a continue statement.
+  fn statement_continue(&mut self) -> Result<Statement> {
+    let token = self.consume()?;
+
+    self.expect(TokenKind::Semi)?;
+
+    Ok(Statement::Continue(Continue {
+      label: None,
+      location: token.location,
+    }))
+  }
+
+  /// Parses a while statement.
+  fn statement_while(&mut self) -> Result<Statement> {
+    let token = self.consume()?;
+
+    self.expect(TokenKind::ParenOpen)?;
+
+    let condition = self.expression(0)?;
+
+    self.expect(TokenKind::ParenClose)?;
+
+    let body = self.statement().map(Box::new)?;
+
+    let location = Location::merge(&token.location, body.location());
+
+    Ok(Statement::While(While {
+      condition,
+      body,
+      label: None,
+      location,
+    }))
+  }
+
+  /// Parses a do-while statement.
+  fn statement_do_while(&mut self) -> Result<Statement> {
+    let token = self.consume()?;
+    let body = self.statement().map(Box::new)?;
+
+    self.expect(TokenKind::WhileKw)?;
+    self.expect(TokenKind::ParenOpen)?;
+
+    let condition = self.expression(0)?;
+
+    self.expect(TokenKind::ParenClose)?;
+    self.expect(TokenKind::Semi)?;
+
+    let location = Location::merge(&token.location, body.location());
+
+    Ok(Statement::DoWhile(DoWhile {
+      condition,
+      body,
+      label: None,
+      location,
+    }))
+  }
+
+  /// Parses a for statement.
+  fn statement_for(&mut self) -> Result<Statement> {
+    let token = self.consume()?;
+
+    self.expect(TokenKind::ParenOpen)?;
+
+    let initializer = self.statement_for_initializer()?;
+    let (condition, _) = self.optional_expression(TokenKind::Semi)?;
+    let (postcondition, _) = self.optional_expression(TokenKind::ParenClose)?;
+    let body = self.statement().map(Box::new)?;
+
+    let location = Location::merge(&token.location, body.location());
+
+    Ok(Statement::For(For {
+      initializer,
+      condition,
+      postcondition,
+      body,
+      label: None,
+      location,
+    }))
+  }
+
+  /// Parses an initializer for a for statement.
+  fn statement_for_initializer(&mut self) -> Result<Initializer> {
+    let token = self.peek(1);
+
+    match token.kind {
+      | TokenKind::IntKw => self.declaration().map(Initializer::Declaration),
+      | _ => {
+        let (expression, location) = self.optional_expression(TokenKind::Semi)?;
+
+        match expression {
+          | Some(expression) => Ok(Initializer::Expression(expression)),
+          | None => Ok(Initializer::None { location }),
+        }
+      },
     }
   }
 
@@ -353,6 +467,26 @@ impl Parser {
     Ok(Statement::Null {
       location: token.location,
     })
+  }
+
+  /// Parses an optional expression up to the given delimiter, and returns `Option<Expression>` with
+  /// the location of either the expression or the delimiter.
+  fn optional_expression(
+    &mut self,
+    delimiter: TokenKind,
+  ) -> Result<(Option<Expression>, Location)> {
+    if self.peek(1).kind == delimiter {
+      let token = self.consume()?;
+
+      Ok((None, token.location))
+    } else {
+      let expression = self.expression(0)?;
+      let token = self.expect(delimiter)?;
+
+      let location = Location::merge(expression.location(), &token.location);
+
+      Ok((Some(expression), location))
+    }
   }
 
   /// Parses an expression.
@@ -1233,7 +1367,7 @@ mod tests {
   }
 
   #[test]
-  fn parse_labeled_statement_progam() {
+  fn parse_labeled_statement_program() {
     let actual = parser(indoc! {"
       int main(void) {
         int x = 0;
@@ -1326,6 +1460,170 @@ mod tests {
       value: 42,
       location: Location::default(),
     }));
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_break_statement() {
+    let actual = parser("break;").statement();
+
+    let expected = Statement::Break(Break {
+      label: None,
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_continue_statement() {
+    let actual = parser("continue;").statement();
+
+    let expected = Statement::Continue(Continue {
+      label: None,
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_while_loop() {
+    let actual = parser(indoc! {"
+      while (1) {
+        break;
+      }
+    "})
+    .statement();
+
+    let expected = Statement::While(While {
+      condition: Expression::Constant(Int {
+        value: 1,
+        location: Location::default(),
+      }),
+      body: Box::new(Statement::Block(Block {
+        body: vec![BlockItem::Statement(Statement::Break(Break {
+          label: None,
+          location: Location::default(),
+        }))],
+        location: Location::default(),
+      })),
+      label: None,
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_do_while_loop() {
+    let actual = parser(indoc! {"
+      do {
+        break;
+      } while (1);
+    "})
+    .statement();
+
+    let expected = Statement::DoWhile(DoWhile {
+      condition: Expression::Constant(Int {
+        value: 1,
+        location: Location::default(),
+      }),
+      body: Box::new(Statement::Block(Block {
+        body: vec![BlockItem::Statement(Statement::Break(Break {
+          label: None,
+          location: Location::default(),
+        }))],
+        location: Location::default(),
+      })),
+      label: None,
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_infinite_for_loop() {
+    let actual = parser(indoc! {"
+      for (;;) {
+        break;
+      }
+    "})
+    .statement();
+
+    let expected = Statement::For(For {
+      initializer: Initializer::None {
+        location: Location::default(),
+      },
+      condition: None,
+      postcondition: None,
+      body: Box::new(Statement::Block(Block {
+        body: vec![BlockItem::Statement(Statement::Break(Break {
+          label: None,
+          location: Location::default(),
+        }))],
+        location: Location::default(),
+      })),
+      label: None,
+      location: Location::default(),
+    });
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_for_loop() {
+    let actual = parser(indoc! {"
+      for (int i = 0; i < 10; i++) {
+        break;
+      }
+    "})
+    .statement();
+
+    let expected = Statement::For(For {
+      initializer: Initializer::Declaration(Declaration {
+        name: Ident {
+          value: "i".to_string().into(),
+          location: Location::default(),
+        },
+        initializer: Some(Expression::Constant(Int {
+          value: 0,
+          location: Location::default(),
+        })),
+        location: Location::default(),
+      }),
+      condition: Some(Expression::Binary(Binary {
+        op: BinaryOp::Less,
+        left: Box::new(Expression::Var(Ident {
+          value: "i".to_string().into(),
+          location: Location::default(),
+        })),
+        right: Box::new(Expression::Constant(Int {
+          value: 10,
+          location: Location::default(),
+        })),
+        location: Location::default(),
+      })),
+      postcondition: Some(Expression::Postfix(Postfix {
+        op: PostfixOp::Inc,
+        operand: Box::new(Expression::Var(Ident {
+          value: "i".to_string().into(),
+          location: Location::default(),
+        })),
+        location: Location::default(),
+      })),
+      body: Box::new(Statement::Block(Block {
+        body: vec![BlockItem::Statement(Statement::Break(Break {
+          label: None,
+          location: Location::default(),
+        }))],
+        location: Location::default(),
+      })),
+      label: None,
+      location: Location::default(),
+    });
 
     assert_eq!(actual, Ok(expected));
   }

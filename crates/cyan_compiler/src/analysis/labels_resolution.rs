@@ -106,6 +106,11 @@ impl LabelsResolutionPass {
       | Statement::Labeled(labeled) => self.resolve_labeled(labeled, state),
       | Statement::If(conditional) => self.resolve_if(conditional, state),
       | Statement::Block(block) => self.resolve_block(block, state),
+      | Statement::For(_) => todo!(),
+      | Statement::While(_) => todo!(),
+      | Statement::DoWhile(_) => todo!(),
+      | Statement::Break(_) => todo!(),
+      | Statement::Continue(_) => todo!(),
       | Statement::Expression(..) | Statement::Return(..) | Statement::Null { .. } => Ok(()),
     }
   }
