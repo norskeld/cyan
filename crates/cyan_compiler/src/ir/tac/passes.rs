@@ -142,6 +142,11 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::Statement::Labeled(labeled) => self.emit_labeled(labeled, instructions),
       | ast::Statement::Block(block) => self.emit_block(block, instructions),
       | ast::Statement::Null { .. } => Ok(()),
+      | ast::Statement::For(_) => todo!(),
+      | ast::Statement::While(_) => todo!(),
+      | ast::Statement::DoWhile(_) => todo!(),
+      | ast::Statement::Break { .. } => todo!(),
+      | ast::Statement::Continue { .. } => todo!(),
     }
   }
 
