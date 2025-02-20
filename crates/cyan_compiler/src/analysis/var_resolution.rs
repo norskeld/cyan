@@ -231,6 +231,11 @@ impl<'ctx> VarResolutionPass<'ctx> {
           location: labeled.location,
         }))
       },
+      | Statement::For(_) => todo!(),
+      | Statement::While(_) => todo!(),
+      | Statement::DoWhile(_) => todo!(),
+      | Statement::Break(_) => todo!(),
+      | Statement::Continue(_) => todo!(),
     }
   }
 

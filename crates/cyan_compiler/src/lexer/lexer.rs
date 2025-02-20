@@ -436,12 +436,14 @@ impl Lexer<'_> {
     let kind = match length {
       | 2 => {
         match value {
+          | "do" => TokenKind::DoKw,
           | "if" => TokenKind::IfKw,
           | _ => TokenKind::Ident,
         }
       },
       | 3 => {
         match value {
+          | "for" => TokenKind::ForKw,
           | "int" => TokenKind::IntKw,
           | _ => TokenKind::Ident,
         }
@@ -454,9 +456,22 @@ impl Lexer<'_> {
           | _ => TokenKind::Ident,
         }
       },
+      | 5 => {
+        match value {
+          | "break" => TokenKind::BreakKw,
+          | "while" => TokenKind::WhileKw,
+          | _ => TokenKind::Ident,
+        }
+      },
       | 6 => {
         match value {
           | "return" => TokenKind::ReturnKw,
+          | _ => TokenKind::Ident,
+        }
+      },
+      | 8 => {
+        match value {
+          | "continue" => TokenKind::ContinueKw,
           | _ => TokenKind::Ident,
         }
       },
@@ -609,12 +624,17 @@ mod tests {
 
   #[test]
   fn lex_keyword() {
+    assert_token!("do", DoKw, "do", 1..1, 1..3);
     assert_token!("if", IfKw, "if", 1..1, 1..3);
+    assert_token!("int", IntKw, "int", 1..1, 1..4);
+    assert_token!("for", ForKw, "for", 1..1, 1..4);
     assert_token!("else", ElseKw, "else", 1..1, 1..5);
     assert_token!("goto", GotoKw, "goto", 1..1, 1..5);
-    assert_token!("int", IntKw, "int", 1..1, 1..4);
     assert_token!("void", VoidKw, "void", 1..1, 1..5);
+    assert_token!("break", BreakKw, "break", 1..1, 1..6);
+    assert_token!("while", WhileKw, "while", 1..1, 1..6);
     assert_token!("return", ReturnKw, "return", 1..1, 1..7);
+    assert_token!("continue", ContinueKw, "continue", 1..1, 1..9);
 
     assert_token!("int123", Ident, "int123", 1..1, 1..7);
     assert_token!("void123", Ident, "void123", 1..1, 1..8);

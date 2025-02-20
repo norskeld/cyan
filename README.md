@@ -94,9 +94,15 @@ Defined using EBNF-like notation.
               | <expression> ";"
               | <identifier> ":" <statement>
               | "if" "(" <expression> ")" <statement> [ "else" <statement> ]
+              | "break" ";"
+              | "continue" ";"
+              | "while" "(" <expression> ")" <statement>
+              | "do" <statement> "while" "(" <expression> ")" ";"
+              | "for" "(" <for-initializer> [ <expression> ] ";" [ <expression> ] ";" [ <expression> ] ")" <statement>
               | "goto" <identifier> ";"
               | <block>
               | ";"
+<for-initializer> = <declaration> | [ <expression> ] ";"
 <expression>  = <factor>
               | <expression> <binary-op> <expression>
               | <expression> "?" <expression> ":" <expression>
@@ -144,6 +150,11 @@ declaration =
   | Declaration(identifier name, expression? initializer)
 
 statement =
+  | Break(identifier label)
+  | Continue(identifier label)
+  | While(expression condition, statement body, identifier label)
+  | DoWhile(expression condition, statement body, identifier label)
+  | For(for_initializer initializer, expression? condition, expression? post, statement body, identifier label)
   | Goto(identifier label)
   | Labeled(identifier label, statement statement)
   | Return(expression)
@@ -151,6 +162,11 @@ statement =
   | If(expression condition, statement then, statement? else)
   | Compound(block)
   | Null
+
+for_initializer =
+  | Declaration(declaration)
+  | Expression(expression)
+  | None
 
 expression =
   | Constant(int)

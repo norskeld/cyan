@@ -5,12 +5,17 @@ use cyan_reporting::Location;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenKind {
   // Keywords.
+  BreakKw,
+  ContinueKw,
+  DoKw,
   ElseKw,
+  ForKw,
   GotoKw,
   IfKw,
   IntKw,
   ReturnKw,
   VoidKw,
+  WhileKw,
   // Arithmetic operators.
   Add,
   Div,
@@ -76,7 +81,20 @@ impl TokenKind {
 
   /// Returns `true` if the token kind is a keyword.
   pub fn is_keyword(&self) -> bool {
-    matches!(self, Self::IntKw | Self::VoidKw | Self::ReturnKw)
+    matches!(
+      self,
+      Self::BreakKw
+        | Self::ContinueKw
+        | Self::DoKw
+        | Self::ElseKw
+        | Self::ForKw
+        | Self::GotoKw
+        | Self::IfKw
+        | Self::IntKw
+        | Self::ReturnKw
+        | Self::VoidKw
+        | Self::WhileKw
+    )
   }
 
   /// Returns `true` if the token kind is a postfix operator.
@@ -152,12 +170,17 @@ impl TokenKind {
   pub fn description(&self) -> &str {
     match self {
       // Keywords.
+      | Self::BreakKw => "the 'break' keyword",
+      | Self::ContinueKw => "the 'continue' keyword",
+      | Self::DoKw => "the 'do' keyword",
       | Self::ElseKw => "the 'else' keyword",
+      | Self::ForKw => "the 'for' keyword",
       | Self::GotoKw => "the 'goto' keyword",
       | Self::IfKw => "the 'if' keyword",
       | Self::IntKw => "the 'int' keyword",
       | Self::ReturnKw => "the 'return' keyword",
       | Self::VoidKw => "the 'void' keyword",
+      | Self::WhileKw => "the 'while' keyword",
       // Arithmetic operators.
       | Self::Add => "a '+'",
       | Self::Div => "a '/'",
