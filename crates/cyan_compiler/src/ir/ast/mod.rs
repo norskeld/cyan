@@ -46,7 +46,57 @@ pub enum Statement {
   Expression(Expression),
   If(If),
   Block(Block),
+  For(For),
+  While(While),
+  DoWhile(DoWhile),
+  Break(Break),
+  Continue(Continue),
   Null { location: Location },
+}
+
+#[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]
+pub struct Break {
+  pub label: Option<Ident>,
+  pub location: Location,
+}
+
+#[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]
+pub struct Continue {
+  pub label: Option<Ident>,
+  pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct For {
+  pub initializer: Initializer,
+  pub condition: Option<Expression>,
+  pub postcondition: Option<Expression>,
+  pub body: Box<Statement>,
+  pub label: Option<Ident>,
+  pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub enum Initializer {
+  Declaration(Declaration),
+  Expression(Expression),
+  None { location: Location },
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct While {
+  pub condition: Expression,
+  pub body: Box<Statement>,
+  pub label: Option<Ident>,
+  pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct DoWhile {
+  pub condition: Expression,
+  pub body: Box<Statement>,
+  pub label: Option<Ident>,
+  pub location: Location,
 }
 
 #[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]
