@@ -719,7 +719,7 @@ impl Parser {
       | TokenKind::LessEqual => BinaryOp::LessEqual,
       | TokenKind::NotEqual => BinaryOp::NotEqual,
       | TokenKind::Or => BinaryOp::Or,
-      // Otherwise we got an unexpected token or an unary operator.
+      // Otherwise we got an unexpected token or a unary operator.
       | _ => {
         return Err(ParseError::new(
           format!("expected binary operator, found '{}'", token.value),

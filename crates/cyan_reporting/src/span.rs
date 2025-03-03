@@ -1,5 +1,5 @@
 use core::fmt;
-use core::ops::{Bound, RangeBounds};
+use core::ops::{Bound, Range, RangeBounds};
 
 /// A half-open span, bounded inclusively below and exclusively above.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -14,12 +14,12 @@ impl<Idx> Span<Idx> {
   }
 
   /// Converts [Range][core::ops::Range] into a [Span].
-  pub fn from_range(range: core::ops::Range<Idx>) -> Self {
+  pub fn from_range(range: Range<Idx>) -> Self {
     range.into()
   }
 
   /// Converts [Span] into a [Range][core::ops::Range].
-  pub fn into_range(self) -> core::ops::Range<Idx> {
+  pub fn into_range(self) -> Range<Idx> {
     self.into()
   }
 
@@ -47,7 +47,7 @@ impl<Idx> Span<Idx> {
   /// Returns the exact length of the span.
   pub fn len(&self) -> usize
   where
-    core::ops::Range<Idx>: ExactSizeIterator,
+    Range<Idx>: ExactSizeIterator,
     Self: Copy,
   {
     self.into_range().len()
@@ -64,13 +64,13 @@ impl<Idx: fmt::Debug> fmt::Debug for Span<Idx> {
   }
 }
 
-impl<Idx> From<core::ops::Range<Idx>> for Span<Idx> {
-  fn from(core::ops::Range { start, end }: core::ops::Range<Idx>) -> Self {
+impl<Idx> From<Range<Idx>> for Span<Idx> {
+  fn from(core::ops::Range { start, end }: Range<Idx>) -> Self {
     Self { start, end }
   }
 }
 
-impl<Idx> From<Span<Idx>> for core::ops::Range<Idx> {
+impl<Idx> From<Span<Idx>> for Range<Idx> {
   fn from(value: Span<Idx>) -> Self {
     value.start..value.end
   }
@@ -98,9 +98,9 @@ impl<Idx> RangeBounds<Idx> for Span<&Idx> {
 
 impl<Idx> IntoIterator for Span<Idx>
 where
-  core::ops::Range<Idx>: Iterator<Item = Idx>,
+  Range<Idx>: Iterator<Item = Idx>,
 {
-  type IntoIter = core::ops::Range<Idx>;
+  type IntoIter = Range<Idx>;
   type Item = Idx;
 
   fn into_iter(self) -> Self::IntoIter {
