@@ -211,8 +211,8 @@ impl<'ctx> VarResolutionPass<'ctx> {
         })
       },
       | Statement::Block(block) => {
-        let mut fresh_variables = variables.fresh();
-        let block = self.resolve_block(block, &mut fresh_variables)?;
+        let mut local_vars = variables.fresh();
+        let block = self.resolve_block(block, &mut local_vars)?;
 
         Ok(Statement::Block(Block {
           body: block.body,
@@ -231,12 +231,93 @@ impl<'ctx> VarResolutionPass<'ctx> {
           location: labeled.location,
         }))
       },
-      | Statement::For(_) => todo!(),
-      | Statement::While(_) => todo!(),
-      | Statement::DoWhile(_) => todo!(),
-      | Statement::Break(_) => todo!(),
-      | Statement::Continue(_) => todo!(),
+      | Statement::For(for_) => {
+        let mut local_vars = variables.fresh();
+        let initializer = self.resolve_initializer(&for_.initializer, &mut local_vars)?;
+        let condition = self.resolve_optional_expression(&for_.condition, &mut local_vars)?;
+
+        let postcondition =
+          self.resolve_optional_expression(&for_.postcondition, &mut local_vars)?;
+
+        let body = self
+          .resolve_statement(&for_.body, &mut local_vars)
+          .map(Box::new)?;
+
+        Ok(Statement::For(For {
+          initializer,
+          condition,
+          postcondition,
+          body,
+          label: for_.label,
+          location: for_.location,
+        }))
+      },
+      | Statement::While(while_) => {
+        let condition = self.resolve_expression(&while_.condition, variables)?;
+
+        let body = self
+          .resolve_statement(&while_.body, variables)
+          .map(Box::new)?;
+
+        Ok(Statement::While(While {
+          condition,
+          body,
+          label: while_.label,
+          location: while_.location,
+        }))
+      },
+      | Statement::DoWhile(dowhile) => {
+        let body = self
+          .resolve_statement(&dowhile.body, variables)
+          .map(Box::new)?;
+
+        let condition = self.resolve_expression(&dowhile.condition, variables)?;
+
+        Ok(Statement::DoWhile(DoWhile {
+          condition,
+          body,
+          label: dowhile.label,
+          location: dowhile.location,
+        }))
+      },
+      | Statement::Break(break_) => Ok(Statement::Break(*break_)),
+      | Statement::Continue(continue_) => Ok(Statement::Continue(*continue_)),
     }
+  }
+
+  fn resolve_initializer(
+    &mut self,
+    initializer: &Initializer,
+    variables: &mut VarMap,
+  ) -> Result<Initializer> {
+    match initializer {
+      | Initializer::Declaration(declaration) => {
+        let resolved_declaration = self.resolve_declaration(declaration, variables)?;
+
+        Ok(Initializer::Declaration(resolved_declaration))
+      },
+      | Initializer::Expression(expression) => {
+        let resolved_expression = self.resolve_expression(expression, variables)?;
+
+        Ok(Initializer::Expression(resolved_expression))
+      },
+      | Initializer::None { location } => {
+        Ok(Initializer::None {
+          location: *location,
+        })
+      },
+    }
+  }
+
+  fn resolve_optional_expression(
+    &self,
+    expression: &Option<Expression>,
+    variables: &mut VarMap,
+  ) -> Result<Option<Expression>> {
+    expression
+      .as_ref()
+      .map(|it| self.resolve_expression(it, variables))
+      .transpose()
   }
 
   #[allow(clippy::only_used_in_recursion)]
