@@ -6,6 +6,8 @@ use std::hash::{Hash, Hasher};
 use cyan_reporting::{Located, Location};
 use internment::Intern;
 
+pub type LoopLabel = Intern<String>;
+
 #[derive(Debug, Located, PartialEq, Eq)]
 pub struct Program {
   pub function: Function,
@@ -56,13 +58,13 @@ pub enum Statement {
 
 #[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]
 pub struct Break {
-  pub label: Option<Ident>,
+  pub loop_label: Option<LoopLabel>,
   pub location: Location,
 }
 
 #[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]
 pub struct Continue {
-  pub label: Option<Ident>,
+  pub loop_label: Option<LoopLabel>,
   pub location: Location,
 }
 
@@ -72,7 +74,7 @@ pub struct For {
   pub condition: Option<Expression>,
   pub postcondition: Option<Expression>,
   pub body: Box<Statement>,
-  pub label: Option<Ident>,
+  pub loop_label: Option<LoopLabel>,
   pub location: Location,
 }
 
@@ -87,7 +89,7 @@ pub enum Initializer {
 pub struct While {
   pub condition: Expression,
   pub body: Box<Statement>,
-  pub label: Option<Ident>,
+  pub loop_label: Option<LoopLabel>,
   pub location: Location,
 }
 
@@ -95,7 +97,7 @@ pub struct While {
 pub struct DoWhile {
   pub condition: Expression,
   pub body: Box<Statement>,
-  pub label: Option<Ident>,
+  pub loop_label: Option<LoopLabel>,
   pub location: Location,
 }
 

@@ -248,7 +248,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
           condition,
           postcondition,
           body,
-          label: for_.label,
+          loop_label: for_.loop_label,
           location: for_.location,
         }))
       },
@@ -262,7 +262,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
         Ok(Statement::While(While {
           condition,
           body,
-          label: while_.label,
+          loop_label: while_.loop_label,
           location: while_.location,
         }))
       },
@@ -276,7 +276,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
         Ok(Statement::DoWhile(DoWhile {
           condition,
           body,
-          label: dowhile.label,
+          loop_label: dowhile.loop_label,
           location: dowhile.location,
         }))
       },
