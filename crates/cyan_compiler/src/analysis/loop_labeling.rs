@@ -182,7 +182,7 @@ impl<'ctx> LoopLabelingPass<'ctx> {
         }))
       },
       // Others leave intact.
-      | Statement::Goto(goto) => Ok(Statement::Goto(goto.clone())),
+      | Statement::Goto(goto) => Ok(Statement::Goto(*goto)),
       | Statement::Return(expression) => Ok(Statement::Return(expression.clone())),
       | Statement::Expression(expression) => Ok(Statement::Expression(expression.clone())),
       | Statement::Null { location } => {
