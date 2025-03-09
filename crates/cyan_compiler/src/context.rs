@@ -5,7 +5,7 @@ use internment::Intern;
 /// This context is used to store global information about the compiler, such as the current
 /// function, the variable counter, etc.
 pub struct Context {
-  /// The current function.
+  /// The current function name.
   pub var_prefix: Intern<String>,
   /// The current variables/labels counter.
   pub var_counter: usize,

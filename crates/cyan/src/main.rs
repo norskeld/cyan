@@ -167,7 +167,7 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   bail_on!(options, CompileStage::Parse);
 
   // -----------------------------------------------------------------------------------------------
-  // Verify and resolve labels:
+  // Analysis/verification passes:
 
   let mut ctx = context::Context::new();
 
@@ -176,6 +176,9 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
 
   let pass = analysis::LabelsResolutionPass::new();
   pass.run(&ast)?;
+
+  let mut pass = analysis::LoopLabelingPass::new(&mut ctx);
+  let ast = pass.run(&ast)?;
 
   if options.should_print(CompileStage::Verify) {
     println!("{}", boxed("Stage | Verify (AST)"));

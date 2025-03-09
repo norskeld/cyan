@@ -263,7 +263,7 @@ impl Parser {
     self.expect(TokenKind::Semi)?;
 
     Ok(Statement::Break(Break {
-      label: None,
+      loop_label: None,
       location: token.location,
     }))
   }
@@ -275,7 +275,7 @@ impl Parser {
     self.expect(TokenKind::Semi)?;
 
     Ok(Statement::Continue(Continue {
-      label: None,
+      loop_label: None,
       location: token.location,
     }))
   }
@@ -297,7 +297,7 @@ impl Parser {
     Ok(Statement::While(While {
       condition,
       body,
-      label: None,
+      loop_label: None,
       location,
     }))
   }
@@ -320,7 +320,7 @@ impl Parser {
     Ok(Statement::DoWhile(DoWhile {
       condition,
       body,
-      label: None,
+      loop_label: None,
       location,
     }))
   }
@@ -343,7 +343,7 @@ impl Parser {
       condition,
       postcondition,
       body,
-      label: None,
+      loop_label: None,
       location,
     }))
   }
@@ -1469,7 +1469,7 @@ mod tests {
     let actual = parser("break;").statement();
 
     let expected = Statement::Break(Break {
-      label: None,
+      loop_label: None,
       location: Location::default(),
     });
 
@@ -1481,7 +1481,7 @@ mod tests {
     let actual = parser("continue;").statement();
 
     let expected = Statement::Continue(Continue {
-      label: None,
+      loop_label: None,
       location: Location::default(),
     });
 
@@ -1504,12 +1504,12 @@ mod tests {
       }),
       body: Box::new(Statement::Block(Block {
         body: vec![BlockItem::Statement(Statement::Break(Break {
-          label: None,
+          loop_label: None,
           location: Location::default(),
         }))],
         location: Location::default(),
       })),
-      label: None,
+      loop_label: None,
       location: Location::default(),
     });
 
@@ -1532,12 +1532,12 @@ mod tests {
       }),
       body: Box::new(Statement::Block(Block {
         body: vec![BlockItem::Statement(Statement::Break(Break {
-          label: None,
+          loop_label: None,
           location: Location::default(),
         }))],
         location: Location::default(),
       })),
-      label: None,
+      loop_label: None,
       location: Location::default(),
     });
 
@@ -1561,12 +1561,12 @@ mod tests {
       postcondition: None,
       body: Box::new(Statement::Block(Block {
         body: vec![BlockItem::Statement(Statement::Break(Break {
-          label: None,
+          loop_label: None,
           location: Location::default(),
         }))],
         location: Location::default(),
       })),
-      label: None,
+      loop_label: None,
       location: Location::default(),
     });
 
@@ -1616,12 +1616,12 @@ mod tests {
       })),
       body: Box::new(Statement::Block(Block {
         body: vec![BlockItem::Statement(Statement::Break(Break {
-          label: None,
+          loop_label: None,
           location: Location::default(),
         }))],
         location: Location::default(),
       })),
-      label: None,
+      loop_label: None,
       location: Location::default(),
     });
 
