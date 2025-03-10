@@ -114,6 +114,9 @@ impl LabelsResolutionPass {
       | Statement::Continue(..)
       | Statement::Return(..)
       | Statement::Null { .. } => Ok(()),
+      | Statement::Switch(switch) => todo!(),
+      | Statement::Case(case) => todo!(),
+      | Statement::DefaultCase(default_case) => todo!(),
     }
   }
 

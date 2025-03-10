@@ -96,6 +96,7 @@ Defined using EBNF-like notation.
               | "if" "(" <expression> ")" <statement> [ "else" <statement> ]
               | "break" ";"
               | "continue" ";"
+              | "switch" "(" <expression> ")" <statement>
               | "while" "(" <expression> ")" <statement>
               | "do" <statement> "while" "(" <expression> ")" ";"
               | "for" "(" <initializer> [ <expression> ] ";" [ <expression> ] ";" [ <expression> ] ")" <statement>
@@ -123,220 +124,17 @@ Defined using EBNF-like notation.
 
 ## Trees and IRs
 
-> [!NOTE]
-> AST, TAC and AAST are described using [Zephyr ASDL][zephyr].
-
 ### AST
 
-Used to represent the structure of the program, and to perform semantic analysis.
-
-<details>
-<summary>Definition</summary>
-
-```scala
-program = Program(function function)
-
-function =
-  | Function(identifier name, block body)
-
-block =
-  | Block(block_item*)
-
-block_item =
-  | Declaration(declaration)
-  | Statement(statement)
-
-declaration =
-  | Declaration(identifier name, expression? initializer)
-
-statement =
-  | Break(identifier label)
-  | Continue(identifier label)
-  | While(expression condition, statement body, identifier label)
-  | DoWhile(expression condition, statement body, identifier label)
-  | For(for_initializer initializer, expression? condition, expression? post, statement body, identifier label)
-  | Goto(identifier label)
-  | Labeled(identifier label, statement statement)
-  | Return(expression)
-  | Expression(expression)
-  | If(expression condition, statement then, statement? else)
-  | Compound(block)
-  | Null
-
-for_initializer =
-  | Declaration(declaration)
-  | Expression(expression)
-  | None
-
-expression =
-  | Constant(int)
-  | Var(identifier)
-  | Unary(unary_op op, expression expression)
-  | Binary(binary_op op, expression left, expression right)
-  | Postfix(postfix_op op, expression operand)
-  | Ternary(expression condition, expression then, expression otherwise)
-  | Assignment(expression lvalue, expression rvalue)
-  | CompoundAssignment(binary_op op, expression lvalue, expression rvalue)
-
-unary_op =
-  | BitNot
-  | Negate
-  | Not
-  | Inc
-  | Dec
-
-binary_op =
-  | Add
-  | Div
-  | Mod
-  | Mul
-  | Sub
-  | BitAnd
-  | BitOr
-  | BitShl
-  | BitShr
-  | BitXor
-  | And
-  | Equal
-  | Greater
-  | GreaterEqual
-  | Less
-  | LessEqual
-  | NotEqual
-  | Or
-  | Assign
-  | AddAssign
-  | SubAssign
-  | MulAssign
-  | DivAssign
-  | ModAssign
-  | BitAndAssign
-  | BitOrAssign
-  | BitXorAssign
-  | BitShlAssign
-  | BitShrAssign
-
-postfix_op =
-  | Dec
-  | Inc
-```
-</details>
+This is used to represent the syntax tree of the program, and to perform semantic analysis.
 
 ### Three Address Code (TAC)
 
-This IR lets us handle structural transformations separately from the details of assembly language (this is to be done), and it's also well suited for applying some compile-time optimizations (also to be done).
-
-<details>
-<summary>Definition</summary>
-
-```scala
-program = Program(function function)
-
-function =
-  | Function(identifier name, instruction* instructions)
-
-instruction =
-  | Return(value value)
-  | Unary(unary_op op, value src, value dst)
-  | Binary(binary_op op, value left, value right, value dst)
-  | Copy(value src, value dst)
-  | Jump(identifier)
-  | JumpIfZero(value condition, identifier target)
-  | JumpIfNotZero(value condition, identifier target)
-  | Label(identifier)
-
-value =
-  | Constant(int)
-  | Var(identifier)
-
-unary_op =
-  | BitNot
-  | Negate
-  | Not
-
-binary_op =
-  | Add
-  | Div
-  | Mod
-  | Mul
-  | Sub
-  | BitAnd
-  | BitOr
-  | BitShl
-  | BitShr
-  | BitXor
-  | Equal
-  | Greater
-  | GreaterEqual
-  | Less
-  | LessEqual
-  | NotEqual
-```
-</details>
+This IR stands between the AST and the assembly code, and lets us handle structural transformations separately from the details of assembly language (this is to be done), and it's also well suited for applying some compile-time optimizations (also to be done).
 
 ### Assembly AST (AAST)
 
-This IR is used to emit assembly code.
-
-<details>
-<summary>Definition</summary>
-
-```scala
-program = Program(function function)
-
-function =
-  | Function(identifier name, instruction* instructions)
-
-instruction =
-  | Mov(operand src, operand dst)
-  | Unary(unary_op op, operand operand)
-  | Binary(binary_op op, operand src, operand dst)
-  | Cmp(operand left, operand right)
-  | Idiv(operand)
-  | Jmp(identifier)
-  | JmpCC(cond_code code, identifier target)
-  | SetCC(cond_code code, operand dst)
-  | Label(identifier)
-  | AllocateStack(int)
-  | Cdq
-  | Ret
-
-unary_op =
-  | Neg
-  | Not
-
-binary_op =
-  | Add
-  | And
-  | Mul
-  | Or
-  | Sal
-  | Sar
-  | Sub
-  | Xor
-
-operand =
-  | Imm(int)
-  | Reg(reg)
-  | Pseudo(identifier)
-  | Stack(int)
-
-cond_code =
-  | E
-  | NE
-  | G
-  | GE
-  | L
-  | LE
-
-reg =
-  | AX
-  | CX
-  | DX
-  | R10
-  | R11
-```
-</details>
+This IR is very low-level, and is used to emit assembly code.
 
 ## Links
 
@@ -344,12 +142,7 @@ reg =
 - [x86-64 instruction set](https://www.felixcloutier.com/x86/)
 - [x86 assembly](https://en.wikibooks.org/wiki/X86_Assembly)
 - [System V ABI](https://gitlab.com/x86-psABIs/x86-64-ABI)
-- [Zephyr ASDL][zephyr]
 
 ## License
 
 [MIT](LICENSE).
-
-<!-- Links. -->
-
-[zephyr]: https://www.cs.princeton.edu/~appel/papers/asdl97.pdf

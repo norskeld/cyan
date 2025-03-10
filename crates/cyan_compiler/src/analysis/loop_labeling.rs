@@ -181,7 +181,6 @@ impl<'ctx> LoopLabelingPass<'ctx> {
           ..labeled.clone()
         }))
       },
-      // Others leave intact.
       | Statement::Goto(goto) => Ok(Statement::Goto(*goto)),
       | Statement::Return(expression) => Ok(Statement::Return(expression.clone())),
       | Statement::Expression(expression) => Ok(Statement::Expression(expression.clone())),
@@ -190,6 +189,9 @@ impl<'ctx> LoopLabelingPass<'ctx> {
           location: *location,
         })
       },
+      | Statement::Switch(switch) => todo!(),
+      | Statement::Case(case) => todo!(),
+      | Statement::DefaultCase(default_case) => todo!(),
     }
   }
 }

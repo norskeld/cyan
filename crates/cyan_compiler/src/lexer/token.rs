@@ -6,7 +6,9 @@ use cyan_reporting::Location;
 pub enum TokenKind {
   // Keywords.
   BreakKw,
+  CaseKw,
   ContinueKw,
+  DefaultKw,
   DoKw,
   ElseKw,
   ForKw,
@@ -14,6 +16,7 @@ pub enum TokenKind {
   IfKw,
   IntKw,
   ReturnKw,
+  SwitchKw,
   VoidKw,
   WhileKw,
   // Arithmetic operators.
@@ -84,7 +87,9 @@ impl TokenKind {
     matches!(
       self,
       Self::BreakKw
+        | Self::CaseKw
         | Self::ContinueKw
+        | Self::DefaultKw
         | Self::DoKw
         | Self::ElseKw
         | Self::ForKw
@@ -92,6 +97,7 @@ impl TokenKind {
         | Self::IfKw
         | Self::IntKw
         | Self::ReturnKw
+        | Self::SwitchKw
         | Self::VoidKw
         | Self::WhileKw
     )
@@ -171,7 +177,9 @@ impl TokenKind {
     match self {
       // Keywords.
       | Self::BreakKw => "the 'break' keyword",
+      | Self::CaseKw => "the 'case' keyword",
       | Self::ContinueKw => "the 'continue' keyword",
+      | Self::DefaultKw => "the 'default' keyword",
       | Self::DoKw => "the 'do' keyword",
       | Self::ElseKw => "the 'else' keyword",
       | Self::ForKw => "the 'for' keyword",
@@ -179,6 +187,7 @@ impl TokenKind {
       | Self::IfKw => "the 'if' keyword",
       | Self::IntKw => "the 'int' keyword",
       | Self::ReturnKw => "the 'return' keyword",
+      | Self::SwitchKw => "the 'switch' keyword",
       | Self::VoidKw => "the 'void' keyword",
       | Self::WhileKw => "the 'while' keyword",
       // Arithmetic operators.

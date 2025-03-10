@@ -282,6 +282,9 @@ impl<'ctx> VarResolutionPass<'ctx> {
       },
       | Statement::Break(break_) => Ok(Statement::Break(*break_)),
       | Statement::Continue(continue_) => Ok(Statement::Continue(*continue_)),
+      | Statement::Switch(switch) => todo!(),
+      | Statement::Case(case) => todo!(),
+      | Statement::DefaultCase(default_case) => todo!(),
     }
   }
 
