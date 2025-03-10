@@ -21,7 +21,7 @@ impl Context {
 
   /// Generates a label name using `label` as a prefix and increments the counter.
   pub fn gen_label(&mut self, label: &str) -> Intern<String> {
-    let label = format!("{}.{}", self.var_prefix, label);
+    let label = format!("{}.{}.{}", self.var_prefix, label, self.var_counter);
     self.var_counter += 1;
 
     label.into()

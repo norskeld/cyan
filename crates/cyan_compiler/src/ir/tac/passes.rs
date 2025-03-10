@@ -94,23 +94,19 @@ impl<'ctx> LoweringPass<'ctx> {
   /// Emits instructions for declarations.
   fn emit_declaration(
     &mut self,
-    ast::Declaration {
-      name,
-      initializer,
-      location,
-    }: &ast::Declaration,
+    declaration: &ast::Declaration,
     instructions: &mut Vec<Instruction>,
   ) -> Result<()> {
     // Treating declaration with initializer like an assignment expression. This is suboptimal, but
     // will do for now.
-    if let Some(right) = initializer {
-      let left = Box::new(ast::Expression::Var(*name));
+    if let Some(right) = &declaration.initializer {
+      let left = Box::new(ast::Expression::Var(declaration.name));
       let right = Box::new(right.clone());
 
       let expression = ast::Expression::Assignment(ast::Assignment {
         left,
         right,
-        location: *location,
+        location: declaration.location,
       });
 
       self.emit_expression(&expression, instructions)?;
@@ -141,12 +137,242 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::Statement::Goto(goto) => self.emit_goto(goto, instructions),
       | ast::Statement::Labeled(labeled) => self.emit_labeled(labeled, instructions),
       | ast::Statement::Block(block) => self.emit_block(block, instructions),
+      | ast::Statement::For(for_) => self.emit_for_loop(for_, instructions),
+      | ast::Statement::While(while_) => self.emit_while_loop(while_, instructions),
+      | ast::Statement::DoWhile(do_while) => self.emit_do_while_loop(do_while, instructions),
+      | ast::Statement::Break(break_) => self.emit_break(break_, instructions),
+      | ast::Statement::Continue(continue_) => self.emit_continue(continue_, instructions),
       | ast::Statement::Null { .. } => Ok(()),
-      | ast::Statement::For(_) => todo!(),
-      | ast::Statement::While(_) => todo!(),
-      | ast::Statement::DoWhile(_) => todo!(),
-      | ast::Statement::Break { .. } => todo!(),
-      | ast::Statement::Continue { .. } => todo!(),
+    }
+  }
+
+  /// Emits instructions for `do-while` loops.
+  ///
+  /// `do-while` loops are lowered to the following TAC:
+  ///
+  /// ```plaintext,ignore
+  /// Label(start_label)
+  /// <body instructions>
+  /// Label(continue_label)
+  /// <condition instructions>
+  /// condition = <condition result>
+  /// JumpIfNotZero(condition, start_label)
+  /// Label(break_label)
+  /// ```
+  fn emit_do_while_loop(
+    &mut self,
+    do_while: &ast::DoWhile,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<()> {
+    if let Some(loop_label) = do_while.loop_label {
+      // Labels.
+      let start_label = self.ctx.gen_label("do_while_start");
+      let continue_label = continue_label(loop_label);
+      let break_label = break_label(loop_label);
+
+      // Instruction vectors.
+      let mut condition_instructions = vec![];
+      let mut body_instructions = vec![];
+
+      // Emit condition instructions.
+      let condition = self.emit_expression(&do_while.condition, &mut condition_instructions)?;
+
+      // Emit body instructions.
+      self.emit_statement(&do_while.body, &mut body_instructions)?;
+
+      // Combine instruction vectors.
+      instructions.push(Instruction::Label(start_label));
+      instructions.extend(body_instructions);
+      instructions.push(Instruction::Label(continue_label));
+      instructions.extend(condition_instructions);
+      instructions.extend([
+        Instruction::JumpIfNotZero {
+          condition,
+          label: start_label,
+        },
+        Instruction::Label(break_label),
+      ]);
+
+      Ok(())
+    } else {
+      Err(LoweringError::new(
+        "do-while loop has no associated label id",
+        do_while.location,
+      ))
+    }
+  }
+
+  /// Emits instructions for `while` loops.
+  ///
+  /// `while` loops are lowered to the following TAC:
+  ///
+  /// ```plaintext,ignore
+  /// Label(continue_label)
+  /// <condition instructions>
+  /// condition = <condition result>
+  /// JumpIfZero(condition, break_label)
+  /// <body instructions>
+  /// Jump(continue_label)
+  /// Label(break_label)
+  /// ```
+  fn emit_while_loop(
+    &mut self,
+    while_: &ast::While,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<()> {
+    if let Some(loop_label) = while_.loop_label {
+      // Labels.
+      let continue_label = continue_label(loop_label);
+      let break_label = break_label(loop_label);
+
+      // Instruction vectors.
+      let mut condition_instructions = vec![];
+      let mut body_instructions = vec![];
+
+      // Emit condition instructions.
+      let condition = self.emit_expression(&while_.condition, &mut condition_instructions)?;
+
+      // Emit body instructions.
+      self.emit_statement(&while_.body, &mut body_instructions)?;
+
+      // Combine instruction vectors.
+      instructions.push(Instruction::Label(continue_label));
+      instructions.extend(condition_instructions);
+      instructions.push(Instruction::JumpIfZero {
+        condition,
+        label: break_label,
+      });
+      instructions.extend(body_instructions);
+      instructions.extend([
+        Instruction::Jump(continue_label),
+        Instruction::Label(break_label),
+      ]);
+
+      Ok(())
+    } else {
+      Err(LoweringError::new(
+        "while loop has no associated label id",
+        while_.location,
+      ))
+    }
+  }
+
+  /// Emits instructions for `for` loops.
+  ///
+  /// `for` loops are lowered to the following TAC:
+  ///
+  /// ```plaintext,ignore
+  /// <initializer instructions>
+  /// Label(start_label)
+  /// <condition instructions>
+  /// condition = <condition result>
+  /// JumpIfZero(condition, break_label)
+  /// <body instructions>
+  /// Label(continue_label)
+  /// <postcondition instructions>
+  /// Jump(start_label)
+  /// Label(break_label)
+  /// ```
+  fn emit_for_loop(&mut self, for_: &ast::For, instructions: &mut Vec<Instruction>) -> Result<()> {
+    if let Some(loop_label) = for_.loop_label {
+      // Labels.
+      let start_label = self.ctx.gen_label("for_start");
+      let continue_label = continue_label(loop_label);
+      let break_label = break_label(loop_label);
+
+      // Instruction vectors.
+      let mut initializer_instructions = vec![];
+      let mut condition_instructions = vec![];
+      let mut body_instructions = vec![];
+      let mut postcondition_instructions = vec![];
+
+      // Emit initializer instructions.
+      if let ast::Initializer::Declaration(declaration) = &for_.initializer {
+        self.emit_declaration(declaration, &mut initializer_instructions)?;
+      } else if let ast::Initializer::Expression(expression) = &for_.initializer {
+        self.emit_expression(expression, &mut initializer_instructions)?;
+      }
+
+      // Emit condition instructions.
+      if let Some(condition) = &for_.condition {
+        let condition = self.emit_expression(condition, &mut condition_instructions)?;
+
+        condition_instructions.push(Instruction::JumpIfZero {
+          condition,
+          label: break_label,
+        });
+      }
+
+      // Emit postcondition instructions.
+      if let Some(postcondition) = &for_.postcondition {
+        self.emit_expression(postcondition, &mut postcondition_instructions)?;
+      }
+
+      // Emit body instructions.
+      self.emit_statement(&for_.body, &mut body_instructions)?;
+
+      // Combine instruction vectors.
+      instructions.extend(initializer_instructions);
+      instructions.push(Instruction::Label(start_label));
+      instructions.extend(condition_instructions);
+      instructions.extend(body_instructions);
+      instructions.push(Instruction::Label(continue_label));
+      instructions.extend(postcondition_instructions);
+      instructions.extend([
+        Instruction::Jump(start_label),
+        Instruction::Label(break_label),
+      ]);
+
+      Ok(())
+    } else {
+      Err(LoweringError::new(
+        "for loop has no associated label id",
+        for_.location,
+      ))
+    }
+  }
+
+  /// Emits instruction for `break`.
+  fn emit_break(&mut self, break_: &ast::Break, instructions: &mut Vec<Instruction>) -> Result<()> {
+    match break_.loop_label {
+      | Some(label) => {
+        let label = break_label(label);
+        let instruction = Instruction::Jump(label);
+
+        instructions.push(instruction);
+
+        Ok(())
+      },
+      | None => {
+        Err(LoweringError::new(
+          "break statement has no associated label id",
+          break_.location,
+        ))
+      },
+    }
+  }
+
+  /// Emits instruction for `continue`.
+  fn emit_continue(
+    &mut self,
+    continue_: &ast::Continue,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<()> {
+    match continue_.loop_label {
+      | Some(label) => {
+        let label = continue_label(label);
+        let instruction = Instruction::Jump(label);
+
+        instructions.push(instruction);
+
+        Ok(())
+      },
+      | None => {
+        Err(LoweringError::new(
+          "continue statement has no associated label id",
+          continue_.location,
+        ))
+      },
     }
   }
 
@@ -657,4 +883,14 @@ impl<'ctx> LoweringPass<'ctx> {
       },
     }
   }
+}
+
+/// Creates a label for a `continue` statement.
+fn continue_label(loop_label: ast::LoopLabel) -> Intern<String> {
+  format!("continue.{}", loop_label).into()
+}
+
+/// Creates a label for a `break` statement.
+fn break_label(loop_label: ast::LoopLabel) -> Intern<String> {
+  format!("break.{}", loop_label).into()
 }
