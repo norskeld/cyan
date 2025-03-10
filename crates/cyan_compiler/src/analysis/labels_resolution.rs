@@ -33,7 +33,7 @@ struct LabelsResolutionState {
 
 impl LabelsResolutionState {
   /// Get difference between used and defined labels.
-  fn diff(&self) -> Option<Vec<Ident>> {
+  pub(crate) fn diff(&self) -> Option<Vec<Ident>> {
     let diff: Vec<_> = self
       .used_labels
       .difference(&self.defined_labels)
@@ -46,25 +46,42 @@ impl LabelsResolutionState {
       Some(diff)
     }
   }
+
+  /// Adds a label to the set of used labels.
+  pub(crate) fn use_label(&mut self, label: Ident) {
+    self.used_labels.insert(label);
+  }
+
+  /// Adds a label to the set of defined labels.
+  pub(crate) fn define_label(&mut self, label: Ident) {
+    self.defined_labels.insert(label);
+  }
+
+  /// Returns the defined label with the given name.
+  pub(crate) fn get_defined_label(&self, label: &Ident) -> Option<&Ident> {
+    self.defined_labels.get(label)
+  }
 }
 
-pub struct LabelsResolutionPass;
+pub struct LabelsResolutionPass {
+  state: LabelsResolutionState,
+}
 
 impl LabelsResolutionPass {
   pub fn new() -> Self {
-    Self
+    Self {
+      state: LabelsResolutionState::default(),
+    }
   }
 
-  pub fn run(&self, program: &Program) -> Result<()> {
+  pub fn run(&mut self, program: &Program) -> Result<()> {
     self.resolve_function(&program.function)
   }
 
-  fn resolve_function(&self, function: &Function) -> Result<()> {
-    let mut state = LabelsResolutionState::default();
+  fn resolve_function(&mut self, function: &Function) -> Result<()> {
+    self.resolve_block(&function.body)?;
 
-    self.resolve_block(&function.body, &mut state)?;
-
-    let diff = state.diff();
+    let diff = self.state.diff();
 
     // TODO: When diagnostics are implemented, we should report _all_ errors.
     if let Some(ident) = diff.and_then(|it| it.first().cloned()) {
@@ -77,38 +94,30 @@ impl LabelsResolutionPass {
     }
   }
 
-  fn resolve_block(&self, block: &Block, state: &mut LabelsResolutionState) -> Result<()> {
+  fn resolve_block(&mut self, block: &Block) -> Result<()> {
     for block_item in &block.body {
-      self.resolve_block_item(block_item, state)?;
+      self.resolve_block_item(block_item)?;
     }
 
     Ok(())
   }
 
-  fn resolve_block_item(
-    &self,
-    block_item: &BlockItem,
-    state: &mut LabelsResolutionState,
-  ) -> Result<()> {
+  fn resolve_block_item(&mut self, block_item: &BlockItem) -> Result<()> {
     match block_item {
       | BlockItem::Declaration(..) => Ok(()),
-      | BlockItem::Statement(statement) => self.resolve_statement(statement, state),
+      | BlockItem::Statement(statement) => self.resolve_statement(statement),
     }
   }
 
-  fn resolve_statement(
-    &self,
-    statement: &Statement,
-    state: &mut LabelsResolutionState,
-  ) -> Result<()> {
+  fn resolve_statement(&mut self, statement: &Statement) -> Result<()> {
     match statement {
-      | Statement::Goto(goto) => self.resolve_goto(goto, state),
-      | Statement::Labeled(labeled) => self.resolve_labeled(labeled, state),
-      | Statement::If(conditional) => self.resolve_if(conditional, state),
-      | Statement::Block(block) => self.resolve_block(block, state),
-      | Statement::For(for_) => self.resolve_statement(&for_.body, state),
-      | Statement::While(while_) => self.resolve_statement(&while_.body, state),
-      | Statement::DoWhile(do_while) => self.resolve_statement(&do_while.body, state),
+      | Statement::Goto(goto) => self.resolve_goto(goto),
+      | Statement::Labeled(labeled) => self.resolve_labeled(labeled),
+      | Statement::If(conditional) => self.resolve_if(conditional),
+      | Statement::Block(block) => self.resolve_block(block),
+      | Statement::For(for_) => self.resolve_statement(&for_.body),
+      | Statement::While(while_) => self.resolve_statement(&while_.body),
+      | Statement::DoWhile(do_while) => self.resolve_statement(&do_while.body),
       | Statement::Expression(..)
       | Statement::Break(..)
       | Statement::Continue(..)
@@ -120,30 +129,30 @@ impl LabelsResolutionPass {
     }
   }
 
-  fn resolve_goto(&self, goto: &Goto, state: &mut LabelsResolutionState) -> Result<()> {
-    state.used_labels.insert(goto.label);
+  fn resolve_goto(&mut self, goto: &Goto) -> Result<()> {
+    self.state.use_label(goto.label);
 
     Ok(())
   }
 
-  fn resolve_labeled(&self, labeled: &Labeled, state: &mut LabelsResolutionState) -> Result<()> {
-    if let Some(label) = state.defined_labels.get(&labeled.label) {
+  fn resolve_labeled(&mut self, labeled: &Labeled) -> Result<()> {
+    if let Some(label) = self.state.get_defined_label(&labeled.label) {
       return Err(LabelsResolutionError::new(
         format!("duplicate label '{}'", label.value),
         label.location,
       ));
     }
 
-    state.defined_labels.insert(labeled.label);
+    self.state.define_label(labeled.label);
 
-    self.resolve_statement(&labeled.statement, state)
+    self.resolve_statement(&labeled.statement)
   }
 
-  fn resolve_if(&self, conditional: &If, state: &mut LabelsResolutionState) -> Result<()> {
-    self.resolve_statement(&conditional.then, state)?;
+  fn resolve_if(&mut self, conditional: &If) -> Result<()> {
+    self.resolve_statement(&conditional.then)?;
 
     match &conditional.otherwise {
-      | Some(otherwise) => self.resolve_statement(otherwise, state),
+      | Some(otherwise) => self.resolve_statement(otherwise),
       | None => Ok(()),
     }
   }
