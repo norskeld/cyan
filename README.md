@@ -98,11 +98,11 @@ Defined using EBNF-like notation.
               | "continue" ";"
               | "while" "(" <expression> ")" <statement>
               | "do" <statement> "while" "(" <expression> ")" ";"
-              | "for" "(" <for-initializer> [ <expression> ] ";" [ <expression> ] ";" [ <expression> ] ")" <statement>
+              | "for" "(" <initializer> [ <expression> ] ";" [ <expression> ] ";" [ <expression> ] ")" <statement>
               | "goto" <identifier> ";"
               | <block>
               | ";"
-<for-initializer> = <declaration> | [ <expression> ] ";"
+<initializer> = <declaration> | [ <expression> ] ";"
 <expression>  = <factor>
               | <expression> <binary-op> <expression>
               | <expression> "?" <expression> ":" <expression>
@@ -128,7 +128,7 @@ Defined using EBNF-like notation.
 
 ### AST
 
-This is a syntax tree representation of a C program.
+Used to represent the structure of the program, and to perform semantic analysis.
 
 <details>
 <summary>Definition</summary>
@@ -224,7 +224,7 @@ postfix_op =
 
 ### Three Address Code (TAC)
 
-This IR lets us handle structural transformations — like removing nested expressions — separately from the details of assembly language, and it's also well suited for applying some compile-time optimizations.
+This IR lets us handle structural transformations separately from the details of assembly language (this is to be done), and it's also well suited for applying some compile-time optimizations (also to be done).
 
 <details>
 <summary>Definition</summary>
