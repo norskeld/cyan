@@ -174,7 +174,7 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   let mut pass = analysis::VarResolutionPass::new(&mut ctx);
   let ast = pass.run(&ast)?;
 
-  let pass = analysis::LabelsResolutionPass::new();
+  let mut pass = analysis::LabelsResolutionPass::new();
   pass.run(&ast)?;
 
   let mut pass = analysis::LoopLabelingPass::new(&mut ctx);
