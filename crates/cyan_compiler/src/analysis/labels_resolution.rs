@@ -118,14 +118,14 @@ impl LabelsResolutionPass {
       | Statement::For(for_) => self.resolve_statement(&for_.body),
       | Statement::While(while_) => self.resolve_statement(&while_.body),
       | Statement::DoWhile(do_while) => self.resolve_statement(&do_while.body),
+      | Statement::Switch(switch) => self.resolve_statement(&switch.body),
+      | Statement::Case(case) => self.resolve_statement(&case.body),
+      | Statement::DefaultCase(default_case) => self.resolve_statement(&default_case.body),
       | Statement::Expression(..)
       | Statement::Break(..)
       | Statement::Continue(..)
       | Statement::Return(..)
       | Statement::Null { .. } => Ok(()),
-      | Statement::Switch(switch) => todo!(),
-      | Statement::Case(case) => todo!(),
-      | Statement::DefaultCase(default_case) => todo!(),
     }
   }
 
