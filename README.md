@@ -36,11 +36,11 @@ If something is missing in the list below, then it's not planned to be implement
   - [x] Labeled statements
   - [ ] Switch statements
   - [x] `goto` statements
-  - [ ] `break` and `continue`
-- [ ] Loops:
-  - [ ] For loops
-  - [ ] While loops
-  - [ ] Do-while loops
+  - [x] `break` and `continue`
+- [x] Loops:
+  - [x] For loops
+  - [x] While loops
+  - [x] Do-while loops
 - [ ] Functions:
   - [ ] Function declarations
   - [ ] Function definitions
