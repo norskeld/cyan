@@ -450,6 +450,7 @@ impl Lexer<'_> {
       },
       | 4 => {
         match value {
+          | "case" => TokenKind::CaseKw,
           | "else" => TokenKind::ElseKw,
           | "goto" => TokenKind::GotoKw,
           | "void" => TokenKind::VoidKw,
@@ -466,6 +467,13 @@ impl Lexer<'_> {
       | 6 => {
         match value {
           | "return" => TokenKind::ReturnKw,
+          | "switch" => TokenKind::SwitchKw,
+          | _ => TokenKind::Ident,
+        }
+      },
+      | 7 => {
+        match value {
+          | "default" => TokenKind::DefaultKw,
           | _ => TokenKind::Ident,
         }
       },
@@ -628,12 +636,15 @@ mod tests {
     assert_token!("if", IfKw, "if", 1..1, 1..3);
     assert_token!("int", IntKw, "int", 1..1, 1..4);
     assert_token!("for", ForKw, "for", 1..1, 1..4);
+    assert_token!("case", CaseKw, "case", 1..1, 1..5);
     assert_token!("else", ElseKw, "else", 1..1, 1..5);
     assert_token!("goto", GotoKw, "goto", 1..1, 1..5);
     assert_token!("void", VoidKw, "void", 1..1, 1..5);
     assert_token!("break", BreakKw, "break", 1..1, 1..6);
     assert_token!("while", WhileKw, "while", 1..1, 1..6);
     assert_token!("return", ReturnKw, "return", 1..1, 1..7);
+    assert_token!("switch", SwitchKw, "switch", 1..1, 1..7);
+    assert_token!("default", DefaultKw, "default", 1..1, 1..8);
     assert_token!("continue", ContinueKw, "continue", 1..1, 1..9);
 
     assert_token!("int123", Ident, "int123", 1..1, 1..7);
