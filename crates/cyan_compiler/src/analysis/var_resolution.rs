@@ -280,11 +280,48 @@ impl<'ctx> VarResolutionPass<'ctx> {
           location: dowhile.location,
         }))
       },
+      | Statement::Switch(switch) => {
+        let control = self
+          .resolve_expression(&switch.control, variables)
+          .map(Box::new)?;
+
+        let body = self
+          .resolve_statement(&switch.body, variables)
+          .map(Box::new)?;
+
+        Ok(Statement::Switch(Switch {
+          control,
+          body,
+          cases: switch.cases.clone(),
+          switch_label: switch.switch_label,
+          location: switch.location,
+        }))
+      },
+      | Statement::Case(case) => {
+        let body = self
+          .resolve_statement(&case.body, variables)
+          .map(Box::new)?;
+
+        Ok(Statement::Case(Case {
+          body,
+          value: case.value.clone(),
+          switch_label: case.switch_label,
+          location: case.location,
+        }))
+      },
+      | Statement::DefaultCase(default_case) => {
+        let body = self
+          .resolve_statement(&default_case.body, variables)
+          .map(Box::new)?;
+
+        Ok(Statement::DefaultCase(DefaultCase {
+          body,
+          switch_label: default_case.switch_label,
+          location: default_case.location,
+        }))
+      },
       | Statement::Break(break_) => Ok(Statement::Break(*break_)),
       | Statement::Continue(continue_) => Ok(Statement::Continue(*continue_)),
-      | Statement::Switch(switch) => todo!(),
-      | Statement::Case(case) => todo!(),
-      | Statement::DefaultCase(default_case) => todo!(),
     }
   }
 
