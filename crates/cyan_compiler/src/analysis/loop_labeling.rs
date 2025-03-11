@@ -38,7 +38,7 @@ impl<'ctx> LoopLabelingPass<'ctx> {
   }
 
   fn label_program(&mut self, program: &Program) -> Result<Program> {
-    let function = self.label_function(&program.function, &None)?;
+    let function = self.label_function(&program.function, (&None, &None))?;
 
     Ok(Program {
       function,
@@ -49,9 +49,9 @@ impl<'ctx> LoopLabelingPass<'ctx> {
   fn label_function(
     &mut self,
     function: &Function,
-    current_label: &Option<LoopLabel>,
+    current_labels: (&Option<LoopLabel>, &Option<LoopLabel>),
   ) -> Result<Function> {
-    let body = self.label_block(&function.body, current_label)?;
+    let body = self.label_block(&function.body, current_labels)?;
 
     Ok(Function {
       name: function.name,
@@ -60,11 +60,15 @@ impl<'ctx> LoopLabelingPass<'ctx> {
     })
   }
 
-  fn label_block(&mut self, block: &Block, current_label: &Option<LoopLabel>) -> Result<Block> {
+  fn label_block(
+    &mut self,
+    block: &Block,
+    current_labels: (&Option<LoopLabel>, &Option<LoopLabel>),
+  ) -> Result<Block> {
     let mut body = Vec::with_capacity(block.body.len());
 
     for item in &block.body {
-      body.push(self.label_block_item(item, current_label)?);
+      body.push(self.label_block_item(item, current_labels)?);
     }
 
     Ok(Block {
@@ -76,12 +80,12 @@ impl<'ctx> LoopLabelingPass<'ctx> {
   fn label_block_item(
     &mut self,
     block_item: &BlockItem,
-    current_label: &Option<LoopLabel>,
+    current_labels: (&Option<LoopLabel>, &Option<LoopLabel>),
   ) -> Result<BlockItem> {
     match block_item {
       | BlockItem::Statement(statement) => {
         self
-          .label_statement(statement, current_label)
+          .label_statement(statement, current_labels)
           .map(BlockItem::Statement)
       },
       | declaration => Ok(declaration.clone()),
@@ -91,11 +95,11 @@ impl<'ctx> LoopLabelingPass<'ctx> {
   fn label_statement(
     &mut self,
     statement: &Statement,
-    current_label: &Option<LoopLabel>,
+    (current_break_label, current_continue_label): (&Option<LoopLabel>, &Option<LoopLabel>),
   ) -> Result<Statement> {
     match statement {
       | Statement::Break(break_) => {
-        current_label
+        current_break_label
           .map(|it| {
             Statement::Break(Break {
               loop_label: Some(it),
@@ -105,7 +109,7 @@ impl<'ctx> LoopLabelingPass<'ctx> {
           .ok_or_else(|| LoopLabelingError::new("break outside of loop", break_.location))
       },
       | Statement::Continue(continue_) => {
-        current_label
+        current_continue_label
           .map(|it| {
             Statement::Continue(Continue {
               loop_label: Some(it),
@@ -116,8 +120,9 @@ impl<'ctx> LoopLabelingPass<'ctx> {
       },
       | Statement::While(while_) => {
         let new_label = Some(self.ctx.gen_label("while"));
+
         let body = self
-          .label_statement(&while_.body, &new_label)
+          .label_statement(&while_.body, (&new_label, &new_label))
           .map(Box::new)?;
 
         Ok(Statement::While(While {
@@ -128,8 +133,9 @@ impl<'ctx> LoopLabelingPass<'ctx> {
       },
       | Statement::DoWhile(do_while) => {
         let new_label = Some(self.ctx.gen_label("do_while"));
+
         let body = self
-          .label_statement(&do_while.body, &new_label)
+          .label_statement(&do_while.body, (&new_label, &new_label))
           .map(Box::new)?;
 
         Ok(Statement::DoWhile(DoWhile {
@@ -140,7 +146,10 @@ impl<'ctx> LoopLabelingPass<'ctx> {
       },
       | Statement::For(for_) => {
         let new_label = Some(self.ctx.gen_label("for"));
-        let body = self.label_statement(&for_.body, &new_label).map(Box::new)?;
+
+        let body = self
+          .label_statement(&for_.body, (&new_label, &new_label))
+          .map(Box::new)?;
 
         Ok(Statement::For(For {
           body,
@@ -149,19 +158,21 @@ impl<'ctx> LoopLabelingPass<'ctx> {
         }))
       },
       | Statement::Block(block) => {
-        let body = self.label_block(block, current_label)?;
+        let body = self.label_block(block, (current_break_label, current_continue_label))?;
 
         Ok(Statement::Block(body))
       },
       | Statement::If(if_) => {
         let then = self
-          .label_statement(&if_.then, current_label)
+          .label_statement(&if_.then, (current_break_label, current_continue_label))
           .map(Box::new)?;
 
         let otherwise = if_
           .otherwise
           .as_ref()
-          .map(|otherwise| self.label_statement(otherwise, current_label))
+          .map(|otherwise| {
+            self.label_statement(otherwise, (current_break_label, current_continue_label))
+          })
           .transpose()?
           .map(Box::new);
 
@@ -173,12 +184,51 @@ impl<'ctx> LoopLabelingPass<'ctx> {
       },
       | Statement::Labeled(labeled) => {
         let statement = self
-          .label_statement(&labeled.statement, current_label)
+          .label_statement(
+            &labeled.statement,
+            (current_break_label, current_continue_label),
+          )
           .map(Box::new)?;
 
         Ok(Statement::Labeled(Labeled {
           statement,
           ..labeled.clone()
+        }))
+      },
+      | Statement::Switch(switch) => {
+        let new_break_label = Some(self.ctx.gen_label("switch"));
+
+        let body = self
+          .label_statement(&switch.body, (&new_break_label, &current_continue_label))
+          .map(Box::new)?;
+
+        Ok(Statement::Switch(Switch {
+          body,
+          switch_label: new_break_label,
+          ..switch.clone()
+        }))
+      },
+      | Statement::Case(case) => {
+        let body = self
+          .label_statement(&case.body, (current_break_label, current_continue_label))
+          .map(Box::new)?;
+
+        Ok(Statement::Case(Case {
+          body,
+          ..case.clone()
+        }))
+      },
+      | Statement::DefaultCase(default_case) => {
+        let body = self
+          .label_statement(
+            &default_case.body,
+            (current_break_label, current_continue_label),
+          )
+          .map(Box::new)?;
+
+        Ok(Statement::DefaultCase(DefaultCase {
+          body,
+          ..default_case.clone()
         }))
       },
       | Statement::Goto(goto) => Ok(Statement::Goto(*goto)),
@@ -189,9 +239,6 @@ impl<'ctx> LoopLabelingPass<'ctx> {
           location: *location,
         })
       },
-      | Statement::Switch(switch) => todo!(),
-      | Statement::Case(case) => todo!(),
-      | Statement::DefaultCase(default_case) => todo!(),
     }
   }
 }
