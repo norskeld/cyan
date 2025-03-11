@@ -53,7 +53,35 @@ pub enum Statement {
   DoWhile(DoWhile),
   Break(Break),
   Continue(Continue),
+  Switch(Switch),
+  Case(Case),
+  DefaultCase(DefaultCase),
   Null { location: Location },
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Switch {
+  pub control: Box<Expression>,
+  pub body: Box<Statement>,
+  /// The cases of the switch statement. These are populated during semantic analysis.
+  pub cases: Vec<(Option<usize>, String)>,
+  pub switch_label: Option<LoopLabel>,
+  pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct Case {
+  pub value: Box<Expression>,
+  pub body: Box<Statement>,
+  pub switch_label: Option<LoopLabel>,
+  pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct DefaultCase {
+  pub body: Box<Statement>,
+  pub switch_label: Option<LoopLabel>,
+  pub location: Location,
 }
 
 #[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]

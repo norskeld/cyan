@@ -250,10 +250,69 @@ impl Parser {
       | TokenKind::ForKw => self.statement_for(),
       | TokenKind::GotoKw => self.statement_goto(),
       | TokenKind::ReturnKw => self.statement_return(),
+      | TokenKind::SwitchKw => self.statement_switch(),
+      | TokenKind::CaseKw => self.statement_case(),
+      | TokenKind::DefaultKw => self.statement_default(),
       | TokenKind::BraceOpen => self.statement_block(),
       | TokenKind::Semi => self.statement_null(),
       | _ => self.statement_expression(),
     }
+  }
+
+  /// Parses a `switch` statement.
+  fn statement_switch(&mut self) -> Result<Statement> {
+    let token = self.consume()?;
+
+    self.expect(TokenKind::ParenOpen)?;
+
+    let control = self.expression(0).map(Box::new)?;
+
+    self.expect(TokenKind::ParenClose)?;
+
+    let body = self.statement().map(Box::new)?;
+    let location = Location::merge(&token.location, body.location());
+
+    Ok(Statement::Switch(Switch {
+      control,
+      body,
+      cases: vec![],
+      switch_label: None,
+      location,
+    }))
+  }
+
+  /// Parses a switch `case`.
+  fn statement_case(&mut self) -> Result<Statement> {
+    let token = self.consume()?;
+    let value = self.expression(0).map(Box::new)?;
+
+    self.expect(TokenKind::Colon)?;
+
+    let body = self.statement().map(Box::new)?;
+    let location = Location::merge(&token.location, body.location());
+
+    Ok(Statement::Case(Case {
+      value,
+      body,
+      switch_label: None,
+      location,
+    }))
+  }
+
+  /// Parses a switch `default` case.
+  fn statement_default(&mut self) -> Result<Statement> {
+    let token = self.consume()?;
+
+    self.expect(TokenKind::Colon)?;
+
+    let body = self.statement().map(Box::new)?;
+    let location = Location::merge(&token.location, body.location());
+
+    Ok(Statement::DefaultCase(DefaultCase {
+      body,
+      switch_label: None,
+      location,
+    }))
   }
 
   /// Parses a break statement.
@@ -291,7 +350,6 @@ impl Parser {
     self.expect(TokenKind::ParenClose)?;
 
     let body = self.statement().map(Box::new)?;
-
     let location = Location::merge(&token.location, body.location());
 
     Ok(Statement::While(While {
@@ -1051,6 +1109,67 @@ mod tests {
         })),
         location: Location::default(),
       })));
+
+    assert_eq!(actual, Ok(expected));
+  }
+
+  #[test]
+  fn parse_switch_statement() {
+    let actual = parser(indoc! {"
+      switch (a) {
+        case 1: return 1;
+        case 2: return 2;
+        default: return 0;
+      }
+    "})
+    .statement();
+
+    let expected = Statement::Switch(Switch {
+      control: Box::new(Expression::Var(Ident {
+        value: "a".to_string().into(),
+        location: Location::default(),
+      })),
+      body: Box::new(Statement::Block(Block {
+        body: vec![
+          BlockItem::Statement(Statement::Case(Case {
+            value: Box::new(Expression::Constant(Int {
+              value: 1,
+              location: Location::default(),
+            })),
+            body: Box::new(Statement::Return(Expression::Constant(Int {
+              value: 1,
+              location: Location::default(),
+            }))),
+            switch_label: None,
+            location: Location::default(),
+          })),
+          BlockItem::Statement(Statement::Case(Case {
+            value: Box::new(Expression::Constant(Int {
+              value: 2,
+              location: Location::default(),
+            })),
+            body: Box::new(Statement::Return(Expression::Constant(Int {
+              value: 2,
+              location: Location::default(),
+            }))),
+            switch_label: None,
+            location: Location::default(),
+          })),
+          BlockItem::Statement(Statement::DefaultCase(DefaultCase {
+            body: Box::new(Statement::Return(Expression::Constant(Int {
+              value: 0,
+              location: Location::default(),
+            }))),
+            switch_label: None,
+            location: Location::default(),
+          })),
+        ],
+        location: Location::default(),
+      })),
+      cases: vec![],
+      switch_label: None,
+      location: Location::default(),
+    });
 
     assert_eq!(actual, Ok(expected));
   }
