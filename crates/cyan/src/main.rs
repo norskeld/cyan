@@ -180,6 +180,9 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   let mut pass = analysis::LoopLabelingPass::new(&mut ctx);
   let ast = pass.run(&ast)?;
 
+  let mut pass = analysis::SwitchResolutionPass::new(&mut ctx);
+  let ast = pass.run(&ast)?;
+
   if options.should_print(CompileStage::Verify) {
     println!("{}", boxed("Stage | Verify (AST)"));
     println!("{ast:#?}\n");
