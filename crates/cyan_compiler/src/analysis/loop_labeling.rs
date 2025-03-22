@@ -199,7 +199,7 @@ impl<'ctx> LoopLabelingPass<'ctx> {
         let new_break_label = Some(self.ctx.gen_label("switch"));
 
         let body = self
-          .label_statement(&switch.body, (&new_break_label, &current_continue_label))
+          .label_statement(&switch.body, (&new_break_label, current_continue_label))
           .map(Box::new)?;
 
         Ok(Statement::Switch(Switch {

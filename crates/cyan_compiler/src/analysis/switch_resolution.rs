@@ -153,7 +153,7 @@ impl<'ctx> SwitchResolutionPass<'ctx> {
         }))
       },
       | Statement::Block(block) => {
-        let block = self.resolve_block(&block, cases)?;
+        let block = self.resolve_block(block, cases)?;
 
         Ok(Statement::Block(block))
       },
@@ -221,7 +221,7 @@ impl<'ctx> SwitchResolutionPass<'ctx> {
         ))
       } else {
         Err(SwitchResolutionError::new(
-          format!("duplicate default case in switch statement"),
+          "duplicate default case in switch statement".to_string(),
           *statement.location(),
         ))
       };
@@ -232,7 +232,7 @@ impl<'ctx> SwitchResolutionPass<'ctx> {
     cases.insert(*key, case_id);
 
     // Resolve inner statements.
-    let resolved = self.resolve_statement(&statement, cases)?;
+    let resolved = self.resolve_statement(statement, cases)?;
 
     Ok((resolved, case_id))
   }
