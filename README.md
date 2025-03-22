@@ -30,11 +30,11 @@ If something is missing in the list below, then it's not planned to be implement
   - [ ] `static`
   - [ ] `extern`
   - [ ] `typedef`
-- [ ] Conditionals and control flow:
+- [x] Conditionals and control flow:
   - [x] If statements
   - [x] Ternary expressions
   - [x] Labeled statements
-  - [ ] Switch statements
+  - [x] Switch statements
   - [x] `goto` statements
   - [x] `break` and `continue`
 - [x] Loops:
