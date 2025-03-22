@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::mem;
 
 use cyan_reporting::{Located, Location};
@@ -275,7 +276,7 @@ impl Parser {
     Ok(Statement::Switch(Switch {
       control,
       body,
-      cases: vec![],
+      cases: HashMap::default(),
       switch_label: None,
       location,
     }))
@@ -1166,7 +1167,7 @@ mod tests {
         ],
         location: Location::default(),
       })),
-      cases: vec![],
+      cases: HashMap::default(),
       switch_label: None,
       location: Location::default(),
     });

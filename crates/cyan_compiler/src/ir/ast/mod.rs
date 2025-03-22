@@ -1,5 +1,6 @@
 //! AST definition.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -7,6 +8,8 @@ use cyan_reporting::{Located, Location};
 use internment::Intern;
 
 pub type LoopLabel = Intern<String>;
+pub type CaseKey = Option<isize>;
+pub type CaseMap = HashMap<CaseKey, Intern<String>>;
 
 #[derive(Debug, Located, PartialEq, Eq)]
 pub struct Program {
@@ -63,8 +66,7 @@ pub enum Statement {
 pub struct Switch {
   pub control: Box<Expression>,
   pub body: Box<Statement>,
-  /// The cases of the switch statement. These are populated during semantic analysis.
-  pub cases: Vec<(Option<usize>, String)>,
+  pub cases: CaseMap,
   pub switch_label: Option<LoopLabel>,
   pub location: Location,
 }

@@ -143,9 +143,9 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::Statement::Break(break_) => self.emit_break(break_, instructions),
       | ast::Statement::Continue(continue_) => self.emit_continue(continue_, instructions),
       | ast::Statement::Null { .. } => Ok(()),
-      | ast::Statement::Switch(switch) => todo!(),
-      | ast::Statement::Case(case) => todo!(),
-      | ast::Statement::DefaultCase(default_case) => todo!(),
+      | ast::Statement::Switch(_switch) => todo!(),
+      | ast::Statement::Case(_case) => todo!(),
+      | ast::Statement::DefaultCase(_default_case) => todo!(),
     }
   }
 
