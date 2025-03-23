@@ -45,6 +45,11 @@ pub enum Instruction {
     condition: Value,
     label: Intern<String>,
   },
+  JumpIfEqual {
+    left: Value,
+    right: Value,
+    label: Intern<String>,
+  },
   Label(Intern<String>),
 }
 

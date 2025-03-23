@@ -142,10 +142,103 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::Statement::DoWhile(do_while) => self.emit_do_while_loop(do_while, instructions),
       | ast::Statement::Break(break_) => self.emit_break(break_, instructions),
       | ast::Statement::Continue(continue_) => self.emit_continue(continue_, instructions),
+      | ast::Statement::Switch(switch) => self.emit_switch(switch, instructions),
+      | ast::Statement::Case(case) => self.emit_case(case, instructions),
+      | ast::Statement::DefaultCase(case) => self.emit_default_case(case, instructions),
       | ast::Statement::Null { .. } => Ok(()),
-      | ast::Statement::Switch(_switch) => todo!(),
-      | ast::Statement::Case(_case) => todo!(),
-      | ast::Statement::DefaultCase(_default_case) => todo!(),
+    }
+  }
+
+  /// Emits instructions for `switch`.
+  ///
+  /// Switches are lowered to the following TAC:
+  ///
+  /// ```plaintext,ignore
+  /// control = <control result>
+  /// JumpIfEqual(control, case1, label1)
+  /// JumpIfEqual(control, case2, label2)
+  /// JumpIfEqual(control, caseN, labelN)
+  /// Jump(default_label)
+  /// Jump(break_label)
+  /// <body instructions>
+  /// Label(break_label)
+  /// ```
+  fn emit_switch(
+    &mut self,
+    switch: &ast::Switch,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<()> {
+    if let Some(switch_label) = switch.switch_label {
+      // Labels.
+      let break_label = break_label(switch_label);
+
+      // Evaluate control expression.
+      let control = self.emit_expression(&switch.control, instructions)?;
+
+      // Evaluate case expressions and push instructions.
+      for (key, label) in &switch.cases {
+        // If Some, then this is a case statement.
+        if let Some(result) = key {
+          instructions.push(Instruction::JumpIfEqual {
+            left: control,
+            right: Value::Constant(*result),
+            label: *label,
+          });
+        }
+      }
+
+      // Push jump to default label if present.
+      if let Some(entry) = switch.cases.get(&None) {
+        instructions.push(Instruction::Jump(*entry))
+      }
+
+      // Push jump to break label.
+      instructions.push(Instruction::Jump(break_label));
+
+      // Evaluate body and push instructions.
+      self.emit_statement(&switch.body, instructions)?;
+
+      // Push break label.
+      instructions.push(Instruction::Label(break_label));
+
+      Ok(())
+    } else {
+      Err(LoweringError::new(
+        "switch statement has no associated label id",
+        switch.location,
+      ))
+    }
+  }
+
+  /// Emits instructions for `case` statements.
+  fn emit_case(&mut self, case: &ast::Case, instructions: &mut Vec<Instruction>) -> Result<()> {
+    if let Some(label) = case.switch_label {
+      instructions.push(Instruction::Label(label));
+
+      self.emit_statement(&case.body, instructions)
+    } else {
+      Err(LoweringError::new(
+        "case statement has no associated label id",
+        case.location,
+      ))
+    }
+  }
+
+  /// Emits instructions for `default` case statements.
+  fn emit_default_case(
+    &mut self,
+    case: &ast::DefaultCase,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<()> {
+    if let Some(label) = case.switch_label {
+      instructions.push(Instruction::Label(label));
+
+      self.emit_statement(&case.body, instructions)
+    } else {
+      Err(LoweringError::new(
+        "default case statement has no associated label id",
+        case.location,
+      ))
     }
   }
 
@@ -889,11 +982,11 @@ impl<'ctx> LoweringPass<'ctx> {
 }
 
 /// Creates a label for a `continue` statement.
-fn continue_label(loop_label: ast::LoopLabel) -> Intern<String> {
-  format!("continue.{}", loop_label).into()
+fn continue_label(label: ast::LoopLabel) -> Intern<String> {
+  format!("continue.{label}").into()
 }
 
 /// Creates a label for a `break` statement.
-fn break_label(loop_label: ast::LoopLabel) -> Intern<String> {
-  format!("break.{}", loop_label).into()
+fn break_label(label: ast::LoopLabel) -> Intern<String> {
+  format!("break.{label}").into()
 }

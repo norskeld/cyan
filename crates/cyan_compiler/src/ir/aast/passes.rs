@@ -192,6 +192,18 @@ impl LoweringPass {
         | tac::Instruction::Jump(label) => {
           instructions.push(Instruction::Jmp(*label));
         },
+        | tac::Instruction::JumpIfEqual { left, right, label } => {
+          let left = self.lower_value(left);
+          let right = self.lower_value(right);
+
+          instructions.extend([
+            Instruction::Cmp { left, right },
+            Instruction::JmpCC {
+              code: CondCode::E,
+              label: *label,
+            },
+          ])
+        },
         | tac::Instruction::JumpIfZero { condition, label } => {
           let right = self.lower_value(condition);
 
