@@ -62,6 +62,7 @@ pub enum TokenKind {
   BraceClose,
   BraceOpen,
   Colon,
+  Comma,
   ParenClose,
   ParenOpen,
   Semi,
@@ -231,6 +232,7 @@ impl TokenKind {
       | Self::Inc => "a '++'",
       // Punctuation.
       | Self::Colon => "a ':'",
+      | Self::Comma => "a ','",
       | Self::BraceClose => "a '}'",
       | Self::BraceOpen => "a '{'",
       | Self::ParenClose => "a ')'",
