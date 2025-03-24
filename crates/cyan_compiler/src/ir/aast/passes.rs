@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use internment::Intern;
 use thiserror::Error;
 
 use crate::ir::aast::*;
@@ -326,7 +325,7 @@ impl PseudoReplacementError {
 /// that tells us how many bytes to allocate on the stack in the next pass (instructions fixup).
 pub struct PseudoReplacementPass {
   offset: isize,
-  offset_map: HashMap<Intern<String>, isize>,
+  offset_map: HashMap<Symbol, isize>,
 }
 
 impl PseudoReplacementPass {

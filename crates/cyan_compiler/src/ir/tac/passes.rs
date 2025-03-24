@@ -982,11 +982,11 @@ impl<'ctx> LoweringPass<'ctx> {
 }
 
 /// Creates a label for a `continue` statement.
-fn continue_label(label: ast::LoopLabel) -> Intern<String> {
+fn continue_label(label: Symbol) -> Symbol {
   format!("continue.{label}").into()
 }
 
 /// Creates a label for a `break` statement.
-fn break_label(label: ast::LoopLabel) -> Intern<String> {
+fn break_label(label: Symbol) -> Symbol {
   format!("break.{label}").into()
 }

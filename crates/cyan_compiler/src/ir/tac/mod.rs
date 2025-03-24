@@ -4,8 +4,9 @@ mod passes;
 
 use std::fmt;
 
-use internment::Intern;
 pub use passes::*;
+
+use crate::symbol::Symbol;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Program {
@@ -14,7 +15,7 @@ pub struct Program {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Function {
-  pub name: Intern<String>,
+  pub name: Symbol,
   pub instructions: Vec<Instruction>,
 }
 
@@ -36,27 +37,27 @@ pub enum Instruction {
     src: Value,
     dst: Value,
   },
-  Jump(Intern<String>),
+  Jump(Symbol),
   JumpIfZero {
     condition: Value,
-    label: Intern<String>,
+    label: Symbol,
   },
   JumpIfNotZero {
     condition: Value,
-    label: Intern<String>,
+    label: Symbol,
   },
   JumpIfEqual {
     left: Value,
     right: Value,
-    label: Intern<String>,
+    label: Symbol,
   },
-  Label(Intern<String>),
+  Label(Symbol),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Value {
   Constant(isize),
-  Var(Intern<String>),
+  Var(Symbol),
 }
 
 impl fmt::Debug for Value {

@@ -3,6 +3,7 @@ use thiserror::Error;
 
 use crate::context::Context;
 use crate::ir::ast::*;
+use crate::symbol::Symbol;
 
 type Result<T> = std::result::Result<T, LoopLabelingError>;
 
@@ -49,7 +50,7 @@ impl<'ctx> LoopLabelingPass<'ctx> {
   fn label_function(
     &mut self,
     function: &Function,
-    current_labels: (&Option<LoopLabel>, &Option<LoopLabel>),
+    current_labels: (&Option<Symbol>, &Option<Symbol>),
   ) -> Result<Function> {
     let body = self.label_block(&function.body, current_labels)?;
 
@@ -63,7 +64,7 @@ impl<'ctx> LoopLabelingPass<'ctx> {
   fn label_block(
     &mut self,
     block: &Block,
-    current_labels: (&Option<LoopLabel>, &Option<LoopLabel>),
+    current_labels: (&Option<Symbol>, &Option<Symbol>),
   ) -> Result<Block> {
     let mut body = Vec::with_capacity(block.body.len());
 
@@ -80,7 +81,7 @@ impl<'ctx> LoopLabelingPass<'ctx> {
   fn label_block_item(
     &mut self,
     block_item: &BlockItem,
-    current_labels: (&Option<LoopLabel>, &Option<LoopLabel>),
+    current_labels: (&Option<Symbol>, &Option<Symbol>),
   ) -> Result<BlockItem> {
     match block_item {
       | BlockItem::Statement(statement) => {
@@ -95,7 +96,7 @@ impl<'ctx> LoopLabelingPass<'ctx> {
   fn label_statement(
     &mut self,
     statement: &Statement,
-    (current_break_label, current_continue_label): (&Option<LoopLabel>, &Option<LoopLabel>),
+    (current_break_label, current_continue_label): (&Option<Symbol>, &Option<Symbol>),
   ) -> Result<Statement> {
     match statement {
       | Statement::Break(break_) => {

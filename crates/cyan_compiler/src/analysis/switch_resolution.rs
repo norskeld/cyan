@@ -1,9 +1,9 @@
 use cyan_reporting::{Located, Location};
-use internment::Intern;
 use thiserror::Error;
 
 use crate::context::Context;
 use crate::ir::ast::*;
+use crate::symbol::Symbol;
 
 type Result<T> = std::result::Result<T, SwitchResolutionError>;
 
@@ -204,7 +204,7 @@ impl<'ctx> SwitchResolutionPass<'ctx> {
     cases: &mut CaseMap,
     case_label: &str,
     statement: &Statement,
-  ) -> Result<(Statement, Intern<String>)> {
+  ) -> Result<(Statement, Symbol)> {
     if !self.inside_switch {
       return Err(SwitchResolutionError::new(
         "case statement outside of switch",

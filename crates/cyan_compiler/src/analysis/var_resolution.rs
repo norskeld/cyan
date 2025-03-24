@@ -1,16 +1,16 @@
 use std::collections::hash_map::HashMap;
 
 use cyan_reporting::{Located, Location};
-use internment::Intern;
 use thiserror::Error;
 
 use crate::context::Context;
 use crate::ir::ast::*;
+use crate::symbol::Symbol;
 
 type Result<T> = std::result::Result<T, VarResolutionError>;
 
 /// A mapping from the user-defined variable names to the unique names to be used later.
-pub type VarMap = HashMap<Intern<String>, VarEntry>;
+pub type VarMap = HashMap<Symbol, VarEntry>;
 
 trait VarMapExt {
   /// Copies the variable map and returns a new one with `local` resetted to `false`.
@@ -31,7 +31,7 @@ impl VarMapExt for VarMap {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VarEntry {
   /// The unique name of the variable.
-  pub name: Intern<String>,
+  pub name: Symbol,
   /// Whether the variable is local to the current block scope.
   pub local: bool,
 }

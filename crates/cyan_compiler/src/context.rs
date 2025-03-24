@@ -1,4 +1,4 @@
-use internment::Intern;
+use crate::symbol::Symbol;
 
 /// The compiler context.
 ///
@@ -6,7 +6,7 @@ use internment::Intern;
 /// function, the variable counter, etc.
 pub struct Context {
   /// The current function name.
-  pub var_prefix: Intern<String>,
+  pub var_prefix: Symbol,
   /// The current variables/labels counter.
   pub var_counter: usize,
 }
@@ -20,7 +20,7 @@ impl Context {
   }
 
   /// Generates a label name using `label` as a prefix and increments the counter.
-  pub fn gen_label(&mut self, label: &str) -> Intern<String> {
+  pub fn gen_label(&mut self, label: &str) -> Symbol {
     let label = format!("{}.{}.{}", self.var_prefix, label, self.var_counter);
     self.var_counter += 1;
 
@@ -28,7 +28,7 @@ impl Context {
   }
 
   /// Generates a temporary variable name scoped to the current function and increments the counter.
-  pub fn gen_temporary(&mut self) -> Intern<String> {
+  pub fn gen_temporary(&mut self) -> Symbol {
     let name = format!("{}.{}", self.var_prefix, self.var_counter);
     self.var_counter += 1;
 
