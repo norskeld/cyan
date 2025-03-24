@@ -3,13 +3,14 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 
 use cyan_reporting::{Located, Location};
-use internment::Intern;
 
-pub type LoopLabel = Intern<String>;
+use crate::symbol::Symbol;
+
 pub type CaseKey = Option<isize>;
-pub type CaseMap = HashMap<CaseKey, Intern<String>>;
+pub type CaseMap = HashMap<CaseKey, Symbol>;
 
 #[derive(Debug, Located, PartialEq, Eq)]
 pub struct Program {
@@ -67,7 +68,7 @@ pub struct Switch {
   pub control: Box<Expression>,
   pub body: Box<Statement>,
   pub cases: CaseMap,
-  pub switch_label: Option<LoopLabel>,
+  pub switch_label: Option<Symbol>,
   pub location: Location,
 }
 
@@ -75,26 +76,26 @@ pub struct Switch {
 pub struct Case {
   pub value: Box<Expression>,
   pub body: Box<Statement>,
-  pub switch_label: Option<LoopLabel>,
+  pub switch_label: Option<Symbol>,
   pub location: Location,
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
 pub struct DefaultCase {
   pub body: Box<Statement>,
-  pub switch_label: Option<LoopLabel>,
+  pub switch_label: Option<Symbol>,
   pub location: Location,
 }
 
 #[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]
 pub struct Break {
-  pub loop_label: Option<LoopLabel>,
+  pub loop_label: Option<Symbol>,
   pub location: Location,
 }
 
 #[derive(Clone, Copy, Debug, Located, PartialEq, Eq)]
 pub struct Continue {
-  pub loop_label: Option<LoopLabel>,
+  pub loop_label: Option<Symbol>,
   pub location: Location,
 }
 
@@ -104,7 +105,7 @@ pub struct For {
   pub condition: Option<Expression>,
   pub postcondition: Option<Expression>,
   pub body: Box<Statement>,
-  pub loop_label: Option<LoopLabel>,
+  pub loop_label: Option<Symbol>,
   pub location: Location,
 }
 
@@ -119,7 +120,7 @@ pub enum Initializer {
 pub struct While {
   pub condition: Expression,
   pub body: Box<Statement>,
-  pub loop_label: Option<LoopLabel>,
+  pub loop_label: Option<Symbol>,
   pub location: Location,
 }
 
@@ -127,7 +128,7 @@ pub struct While {
 pub struct DoWhile {
   pub condition: Expression,
   pub body: Box<Statement>,
-  pub loop_label: Option<LoopLabel>,
+  pub loop_label: Option<Symbol>,
   pub location: Location,
 }
 
@@ -270,8 +271,16 @@ pub struct Int {
 
 #[derive(Clone, Copy, Debug, Located, Eq)]
 pub struct Ident {
-  pub value: Intern<String>,
+  pub value: Symbol,
   pub location: Location,
+}
+
+impl Deref for Ident {
+  type Target = Symbol;
+
+  fn deref(&self) -> &Self::Target {
+    &self.value
+  }
 }
 
 impl PartialEq<Ident> for Ident {

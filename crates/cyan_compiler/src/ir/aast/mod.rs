@@ -4,8 +4,9 @@ mod passes;
 
 use std::fmt;
 
-use internment::Intern;
 pub use passes::*;
+
+use crate::symbol::Symbol;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Program {
@@ -14,7 +15,7 @@ pub struct Program {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Function {
-  pub name: Intern<String>,
+  pub name: Symbol,
   pub instructions: Vec<Instruction>,
 }
 
@@ -37,16 +38,16 @@ pub enum Instruction {
     left: Operand,
     right: Operand,
   },
-  Jmp(Intern<String>),
+  Jmp(Symbol),
   JmpCC {
     code: CondCode,
-    label: Intern<String>,
+    label: Symbol,
   },
   SetCC {
     code: CondCode,
     dst: Operand,
   },
-  Label(Intern<String>),
+  Label(Symbol),
   Idiv(Operand),
   AllocateStack(isize),
   Cdq,
@@ -75,7 +76,7 @@ pub enum BinaryOp {
 pub enum Operand {
   Imm(isize),
   Reg(Reg),
-  Pseudo(Intern<String>),
+  Pseudo(Symbol),
   Stack(isize),
 }
 
