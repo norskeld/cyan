@@ -19,7 +19,7 @@ pub const CARET: u8 = b'^';
 pub const UNDERSCORE: u8 = b'_';
 // pub const AT_SIGN: u8 = b'@';
 
-// pub const COMMA: u8 = b',';
+pub const COMMA: u8 = b',';
 // pub const DOT: u8 = b'.';
 pub const QUESTION: u8 = b'?';
 

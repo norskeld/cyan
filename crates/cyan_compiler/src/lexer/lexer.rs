@@ -204,6 +204,7 @@ impl Lexer<'_> {
       | STAR => self.star(),
       | PERCENT => self.percent(),
       | COLON => self.colon(),
+      | COMMA => self.comma(),
       | QUESTION => self.question(),
       | SEMICOLON => self.semicolon(),
       | BRACE_OPEN => self.brace_open(),
@@ -255,6 +256,11 @@ impl Lexer<'_> {
   /// Returns a token for `:`.
   fn colon(&mut self) -> Token {
     self.token_single(TokenKind::Colon)
+  }
+
+  /// Returns a token for `,`.
+  fn comma(&mut self) -> Token {
+    self.token_single(TokenKind::Comma)
   }
 
   /// Returns a token for `?`.
@@ -740,6 +746,7 @@ mod tests {
     assert_token!(":", Colon, ":", 1..1, 1..2);
     assert_token!(";", Semi, ";", 1..1, 1..2);
     assert_token!("?", Question, "?", 1..1, 1..2);
+    assert_token!(",", Comma, ",", 1..1, 1..2);
   }
 
   #[test]
