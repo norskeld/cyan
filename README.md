@@ -77,6 +77,8 @@ Optimizations:
 - [ ] Register allocation
 - [ ] Register coalescing
 
+Beyond that I'm also thinking about adding support for the [QBE](https://c9x.me/compile/) backend and some extensions to the language, like modules (not macros).
+
 ## Grammar
 
 Defined using EBNF-like notation.
@@ -124,17 +126,19 @@ Defined using EBNF-like notation.
 
 ## Trees and IRs
 
+The standard drill: programs get lexed, then parsed into AST, then lowered to TAC, then into AAST, which is then used to emit assembly.
+
 ### AST
 
 This is used to represent the syntax tree of the program, and to perform semantic analysis.
 
 ### Three Address Code (TAC)
 
-This IR stands between the AST and the assembly code, and lets us handle structural transformations separately from the details of assembly language (this is to be done), and it's also well suited for applying some compile-time optimizations (also to be done).
+This IR stands between the AST and the assembly code, and will let us handle structural transformations separately from the details of assembly language (this is to be done), and it's also should be well suited for applying some compile-time optimizations (also to be done).
 
 ### Assembly AST (AAST)
 
-This IR is very low-level, and is used to emit assembly code.
+This IR is very low-level, relatively flat, and is used to emit assembly code in AT&T syntax.
 
 ## Links
 
