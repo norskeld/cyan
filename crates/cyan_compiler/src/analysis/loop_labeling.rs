@@ -39,24 +39,33 @@ impl<'ctx> LoopLabelingPass<'ctx> {
   }
 
   fn label_program(&mut self, program: &Program) -> Result<Program> {
-    let function = self.label_function(&program.function, (&None, &None))?;
+    let mut declarations = vec![];
+
+    for declaration in &program.declarations {
+      if declaration.is_definition() {
+        let function = self.label_function(&declaration, (&None, &None))?;
+        declarations.push(function);
+      }
+    }
 
     Ok(Program {
-      function,
+      declarations,
       location: program.location,
     })
   }
 
   fn label_function(
     &mut self,
-    function: &Function,
+    function: &FuncDeclaration,
     current_labels: (&Option<Symbol>, &Option<Symbol>),
-  ) -> Result<Function> {
-    let body = self.label_block(&function.body, current_labels)?;
+  ) -> Result<FuncDeclaration> {
+    // NOTE: We already ensured the body is present.
+    let body = self.label_block(&function.body.as_ref().unwrap(), current_labels)?;
 
-    Ok(Function {
+    Ok(FuncDeclaration {
       name: function.name,
-      body,
+      body: Some(body),
+      params: function.params.clone(),
       location: function.location,
     })
   }
