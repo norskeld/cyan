@@ -171,7 +171,7 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
 
   let mut ctx = context::Context::new();
 
-  let mut pass = analysis::VarResolutionPass::new(&mut ctx);
+  let mut pass = analysis::IdResolutionPass::new(&mut ctx);
   let ast = pass.run(&ast)?;
 
   let mut pass = analysis::LabelsResolutionPass::new();
