@@ -140,32 +140,90 @@ impl Parser {
 impl Parser {
   /// Parses a whole program.
   fn program(&mut self) -> Result<Program> {
-    let init_location = Location::default();
-    let function = self.function()?;
+    let declarations = self.declarations()?;
 
-    let location = Location::merge(&init_location, &function.location);
+    let location = Location::default().merge(
+      &declarations
+        .last()
+        .map_or_else(|| Location::default(), |it| it.location),
+    );
 
-    Ok(Program { function, location })
-  }
-
-  /// Parses a function definition.
-  fn function(&mut self) -> Result<Function> {
-    let start = self.expect(TokenKind::IntKw)?;
-
-    let name = self.identifier()?;
-
-    self.expect(TokenKind::ParenOpen)?;
-    self.expect(TokenKind::VoidKw)?;
-    self.expect(TokenKind::ParenClose)?;
-
-    let body = self.block()?;
-    let location = Location::merge(&start.location, &body.location);
-
-    Ok(Function {
-      name,
-      body,
+    Ok(Program {
+      declarations,
       location,
     })
+  }
+
+  /// Parses top-level declarations (only function atm).
+  fn declarations(&mut self) -> Result<Vec<FuncDeclaration>> {
+    let mut declarations = vec![];
+
+    while self.peek(1).kind != TokenKind::Eof {
+      declarations.push(self.function()?);
+    }
+
+    Ok(declarations)
+  }
+
+  /// Parses either a function definition or a function declaration.
+  fn function(&mut self) -> Result<FuncDeclaration> {
+    let start = self.expect(TokenKind::IntKw)?;
+    let name = self.identifier()?;
+    self.expect(TokenKind::ParenOpen)?;
+    let params = self.params_list()?;
+    self.expect(TokenKind::ParenClose)?;
+
+    let node = if self.peek(1).kind == TokenKind::Semi {
+      let semi = self.consume()?;
+      let location = start.location.merge(&semi.location);
+
+      FuncDeclaration {
+        name,
+        params,
+        body: None,
+        location,
+      }
+    } else {
+      let body = self.block()?;
+      let location = start.location.merge(&body.location);
+
+      FuncDeclaration {
+        name,
+        params,
+        body: Some(body),
+        location,
+      }
+    };
+
+    Ok(node)
+  }
+
+  /// Parses a parameters list delimited by commas.
+  fn params_list(&mut self) -> Result<Vec<Ident>> {
+    let next = self.consume()?;
+
+    if let TokenKind::VoidKw = next.kind {
+      Ok(vec![])
+    } else {
+      let mut params = vec![];
+
+      loop {
+        self.expect(TokenKind::IntKw)?;
+
+        let param = self.identifier()?;
+        let peek = self.peek(1);
+
+        params.push(param);
+
+        if let TokenKind::Comma = peek.kind {
+          self.consume()?;
+        } else {
+          break;
+        }
+      }
+
+      Ok(params)
+    }
   }
 
   /// Parses a block.
@@ -198,37 +256,52 @@ impl Parser {
   fn declaration(&mut self) -> Result<Declaration> {
     let start = self.expect(TokenKind::IntKw)?;
     let name = self.identifier()?;
-
     let next = self.peek(1);
 
     match next.kind {
+      // int ident =
       | TokenKind::Assign => {
         self.consume()?;
-
         let right = self.expression(0)?;
         let end = self.expect(TokenKind::Semi)?;
-        let location = Location::merge(&start.location, &end.location);
+        let location = start.location.merge(&end.location);
 
-        Ok(Declaration {
+        Ok(Declaration::Var(VarDeclaration {
           name,
           initializer: Some(right),
           location,
-        })
+        }))
       },
+      // int ident;
       | TokenKind::Semi => {
         let end = self.expect(TokenKind::Semi)?;
-        let location = Location::merge(&start.location, &end.location);
+        let location = start.location.merge(&end.location);
 
-        Ok(Declaration {
+        Ok(Declaration::Var(VarDeclaration {
           name,
           initializer: None,
           location,
-        })
+        }))
+      },
+      // int ident(
+      | TokenKind::ParenOpen => {
+        self.consume()?;
+        let params = self.params_list()?;
+        self.expect(TokenKind::ParenClose)?;
+        let end = self.expect(TokenKind::Semi)?;
+        let location = start.location.merge(&end.location);
+
+        Ok(Declaration::Func(FuncDeclaration {
+          name,
+          params,
+          body: None,
+          location,
+        }))
       },
       | _ => {
         Err(ParseError::new(
           format!(
-            "expected ';' or '=' after declaration, found '{}'",
+            "expected variable of function declarations, found '{}'",
             next.value
           ),
           next.location,
@@ -412,7 +485,17 @@ impl Parser {
     let token = self.peek(1);
 
     match token.kind {
-      | TokenKind::IntKw => self.declaration().map(Initializer::Declaration),
+      | TokenKind::IntKw => {
+        match self.declaration()? {
+          | Declaration::Var(var_declaration) => Ok(Initializer::Declaration(var_declaration)),
+          | Declaration::Func(func_declaration) => {
+            Err(ParseError::new(
+              "expected a variable declaration, but got function declaration",
+              func_declaration.location,
+            ))
+          },
+        }
+      },
       | _ => {
         let (expression, location) = self.optional_expression(TokenKind::Semi)?;
 
@@ -908,14 +991,15 @@ mod tests {
     .parse();
 
     let expected = Program {
-      function: Function {
+      declarations: vec![FuncDeclaration {
         name: Ident {
           value: "main".to_string().into(),
           location: Location::default(),
         },
-        body: Block {
+        params: vec![],
+        body: Some(Block {
           body: vec![
-            BlockItem::Declaration(Declaration {
+            BlockItem::Declaration(Declaration::Var(VarDeclaration {
               name: Ident {
                 value: "a".to_string().into(),
                 location: Location::default(),
@@ -925,8 +1009,8 @@ mod tests {
                 location: Location::default(),
               })),
               location: Location::default(),
-            }),
-            BlockItem::Declaration(Declaration {
+            })),
+            BlockItem::Declaration(Declaration::Var(VarDeclaration {
               name: Ident {
                 value: "b".to_string().into(),
                 location: Location::default(),
@@ -936,15 +1020,15 @@ mod tests {
                 location: Location::default(),
               })),
               location: Location::default(),
-            }),
-            BlockItem::Declaration(Declaration {
+            })),
+            BlockItem::Declaration(Declaration::Var(VarDeclaration {
               name: Ident {
                 value: "c".to_string().into(),
                 location: Location::default(),
               },
               initializer: None,
               location: Location::default(),
-            }),
+            })),
             BlockItem::Statement(Statement::Expression(Expression::Assignment(Assignment {
               left: Box::new(Expression::Var(Ident {
                 value: "b".to_string().into(),
@@ -989,9 +1073,9 @@ mod tests {
             }))),
           ],
           location: Location::default(),
-        },
+        }),
         location: Location::default(),
-      },
+      }],
       location: Location::default(),
     };
 
@@ -1002,7 +1086,7 @@ mod tests {
   fn parse_declaration_with_initializer() {
     let actual = parser("int meaning = 42;").declaration();
 
-    let expected = Declaration {
+    let expected = Declaration::Var(VarDeclaration {
       name: Ident {
         value: "meaning".to_string().into(),
         location: Location::default(),
@@ -1012,7 +1096,7 @@ mod tests {
         location: Location::default(),
       })),
       location: Location::default(),
-    };
+    });
 
     assert_eq!(actual, Ok(expected));
   }
@@ -1021,14 +1105,14 @@ mod tests {
   fn parse_declaration_without_initializer() {
     let actual = parser("int meaning;").declaration();
 
-    let expected = Declaration {
+    let expected = Declaration::Var(VarDeclaration {
       name: Ident {
         value: "meaning".to_string().into(),
         location: Location::default(),
       },
       initializer: None,
       location: Location::default(),
-    };
+    });
 
     assert_eq!(actual, Ok(expected));
   }
@@ -1037,7 +1121,7 @@ mod tests {
   fn parse_declaration_with_multiple_assignments() {
     let actual = parser("int a = b = c = 42;").block_item();
 
-    let expected = BlockItem::Declaration(Declaration {
+    let expected = BlockItem::Declaration(Declaration::Var(VarDeclaration {
       name: Ident {
         value: "a".to_string().into(),
         location: Location::default(),
@@ -1061,7 +1145,7 @@ mod tests {
         location: Location::default(),
       })),
       location: Location::default(),
-    });
+    }));
 
     assert_eq!(actual, Ok(expected));
   }
@@ -1499,14 +1583,15 @@ mod tests {
     .parse();
 
     let expected = Program {
-      function: Function {
+      declarations: vec![FuncDeclaration {
         name: Ident {
           value: "main".to_string().into(),
           location: Location::default(),
         },
-        body: Block {
+        params: vec![],
+        body: Some(Block {
           body: vec![
-            BlockItem::Declaration(Declaration {
+            BlockItem::Declaration(Declaration::Var(VarDeclaration {
               name: Ident {
                 value: "x".to_string().into(),
                 location: Location::default(),
@@ -1516,7 +1601,7 @@ mod tests {
                 location: Location::default(),
               })),
               location: Location::default(),
-            }),
+            })),
             BlockItem::Statement(Statement::Labeled(Labeled {
               label: Ident {
                 value: "foo".to_string().into(),
@@ -1541,9 +1626,9 @@ mod tests {
             }))),
           ],
           location: Location::default(),
-        },
+        }),
         location: Location::default(),
-      },
+      }],
       location: Location::default(),
     };
 
@@ -1703,7 +1788,7 @@ mod tests {
     .statement();
 
     let expected = Statement::For(For {
-      initializer: Initializer::Declaration(Declaration {
+      initializer: Initializer::Declaration(VarDeclaration {
         name: Ident {
           value: "i".to_string().into(),
           location: Location::default(),
@@ -1950,15 +2035,16 @@ mod tests {
   fn parse_empty_main() {
     let actual = parser("int main(void) {}").function();
 
-    let expected = Function {
+    let expected = FuncDeclaration {
       name: Ident {
         value: "main".to_string().into(),
         location: Location::default(),
       },
-      body: Block {
+      params: vec![],
+      body: Some(Block {
         body: vec![],
         location: Location::default(),
-      },
+      }),
       location: Location::default(),
     };
 

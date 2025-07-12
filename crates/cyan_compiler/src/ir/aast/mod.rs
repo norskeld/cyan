@@ -10,7 +10,7 @@ use crate::symbol::Symbol;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Program {
-  pub function: Function,
+  pub definitions: Vec<Function>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -49,7 +49,10 @@ pub enum Instruction {
   },
   Label(Symbol),
   Idiv(Operand),
-  AllocateStack(isize),
+  AllocateStack(usize),
+  DeallocateStack(usize),
+  Push(Operand),
+  Call(Symbol),
   Cdq,
   Ret,
 }
@@ -106,6 +109,10 @@ pub enum Reg {
   AX,
   CX,
   DX,
+  DI,
+  SI,
+  R8,
+  R9,
   R10,
   R11,
 }

@@ -44,26 +44,37 @@ impl<'ctx> LoweringPass<'ctx> {
 
   /// Lowers an AST program to a TAC equivalent.
   fn lower_program(&mut self, program: &ast::Program) -> Result<Program> {
-    let function = self.lower_function(&program.function)?;
+    let mut definitions = Vec::new();
 
-    Ok(Program { function })
+    for function in &program.declarations {
+      if function.is_definition() {
+        definitions.push(self.lower_func_declaration(&function)?);
+      }
+    }
+
+    Ok(Program { definitions })
   }
 
-  /// Lowers a function by converting its body to a flat sequence of instructions.
-  fn lower_function(&mut self, function: &ast::Function) -> Result<Function> {
+  /// Lowers a function declaration by converting its body to a flat sequence of instructions.
+  fn lower_func_declaration(&mut self, function: &ast::FuncDeclaration) -> Result<Function> {
     // Set the prefix for temporary variables to current function's name so that emitted
     // instructions' temporary variables names are "scoped".
     self.ctx.var_prefix = function.name.value;
 
     let mut instructions = Vec::new();
 
-    self.emit_block(&function.body, &mut instructions)?;
+    // NOTE: We already ensured the body is present.
+    self.emit_block(function.body.as_ref().unwrap(), &mut instructions)?;
 
     // Shove a return instruction at the end of the function.
     instructions.push(Instruction::Return(Value::Constant(0)));
 
+    // Get params (only identifiers for now, since the only supported type is `int`).
+    let params = function.params.iter().map(|it| it.value).collect();
+
     Ok(Function {
       name: function.name.value,
+      params,
       instructions,
     })
   }
@@ -85,16 +96,29 @@ impl<'ctx> LoweringPass<'ctx> {
   ) -> Result<()> {
     match block_item {
       | ast::BlockItem::Declaration(declaration) => {
-        self.emit_declaration(declaration, instructions)
+        self.emit_local_declaration(declaration, instructions)
       },
       | ast::BlockItem::Statement(statement) => self.emit_statement(statement, instructions),
     }
   }
 
-  /// Emits instructions for declarations.
-  fn emit_declaration(
+  /// Emits instructions for local declarations.
+  fn emit_local_declaration(
     &mut self,
     declaration: &ast::Declaration,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<()> {
+    if let ast::Declaration::Var(declaration) = declaration {
+      self.emit_var_declaration(declaration, instructions)?;
+    }
+
+    Ok(())
+  }
+
+  /// Emits instructions for variable declarations.
+  fn emit_var_declaration(
+    &mut self,
+    declaration: &ast::VarDeclaration,
     instructions: &mut Vec<Instruction>,
   ) -> Result<()> {
     // Treating declaration with initializer like an assignment expression. This is suboptimal, but
@@ -384,7 +408,7 @@ impl<'ctx> LoweringPass<'ctx> {
 
       // Emit initializer instructions.
       if let ast::Initializer::Declaration(declaration) = &for_.initializer {
-        self.emit_declaration(declaration, &mut initializer_instructions)?;
+        self.emit_var_declaration(declaration, &mut initializer_instructions)?;
       } else if let ast::Initializer::Expression(expression) = &for_.initializer {
         self.emit_expression(expression, &mut initializer_instructions)?;
       }
@@ -492,7 +516,36 @@ impl<'ctx> LoweringPass<'ctx> {
       | ast::Expression::CompoundAssignment(assignment) => {
         self.emit_compound_assignment(assignment, instructions)
       },
+      | ast::Expression::FuncCall(func_call) => self.emit_func_call(func_call, instructions),
     }
+  }
+
+  fn emit_func_call(
+    &mut self,
+    func_call: &ast::FuncCall,
+    instructions: &mut Vec<Instruction>,
+  ) -> Result<Value> {
+    let dst = Value::Var(self.ctx.gen_temporary());
+
+    let mut arg_instructions = vec![];
+    let mut arg_values = vec![];
+
+    // Go over arguments and emit both instructions and values.
+    for arg in &func_call.args {
+      let value = self.emit_expression(arg, &mut arg_instructions)?;
+      arg_values.push(value);
+    }
+
+    // Now push instructions to the main instructions vector.
+    instructions.extend(arg_instructions);
+
+    instructions.push(Instruction::FuncCall {
+      name: *func_call.name,
+      args: arg_values,
+      dst,
+    });
+
+    Ok(dst)
   }
 
   /// Emits instructions for unary operators.
@@ -792,17 +845,12 @@ impl<'ctx> LoweringPass<'ctx> {
 
   /// Emits instructions for the `&&` operator.
   ///
-  /// We start by evaluating left subexpression. If it’s 0, we short-circuit and set result to 0,
-  /// without evaluating right subexpression. To accomplish this we use the JumpIfZero instruction;
-  /// if left value is 0, we jump straight to false_label, then set result to 0 with the
-  /// Copy(0, result) instruction.
+  /// First, we evaluate the left subexpression. If it's 0, we directly set the result to 0 and skip
+  /// evaluating the right subexpression using the JumpIfZero instruction.
   ///
-  /// If right value isn’t 0, we still need to evaluate right expression. We handle the case where
-  /// right value is 0 exactly like the case where left value is 0, by jumping to false_label with
-  /// JumpIfZero. We reach the Copy(1, result) instruction only if we didn’t take either
-  /// conditional jump. That means both left and right expressions are non-zero, so we set result
-  /// to 1 (Copy(1, result)). Then, we jump over Copy(0, result) to the end_label to avoid
-  /// overwriting result.
+  /// If the left value is non-zero, we evaluate the right subexpression. Again, if it's 0, we set
+  /// the result to 0. If both left and right values are non-zero, we set the result to 1 and jump
+  /// over the zero setting to the end.
   ///
   /// Pseudocode:
   ///
