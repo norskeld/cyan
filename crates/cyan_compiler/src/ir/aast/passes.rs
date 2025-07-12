@@ -5,6 +5,9 @@ use thiserror::Error;
 use crate::ir::aast::*;
 use crate::ir::tac;
 
+/// Argument registers.
+const ARG_REGISTERS: [Reg; 6] = [Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
+
 #[derive(Debug, Error)]
 #[error("TAC lowering error: {0}")]
 pub struct LoweringError(String);
@@ -32,16 +35,124 @@ impl LoweringPass {
   }
 
   fn lower_program(&self, program: &tac::Program) -> Result<Program, LoweringError> {
-    let function = self.lower_function(&program.function)?;
+    // let function = self.lower_function(&program.function)?;
+    let mut definitions = Vec::new();
 
-    Ok(Program { function })
+    for function in &program.definitions {
+      let definition = self.lower_func(function)?;
+      definitions.push(definition);
+    }
+
+    Ok(Program { definitions })
   }
 
-  fn lower_function(&self, function: &tac::Function) -> Result<Function, LoweringError> {
-    let name = function.name;
-    let instructions = self.lower_instructions(&function.instructions)?;
+  /// Lowers function parameters to the given function.
+  ///
+  /// According to the System V calling convention:
+  ///
+  /// - the first 6 integer arguments are passed in registers:
+  ///   - 32-bit integers: EDI, ESI, EDX, ECX, R8D, and R9D;
+  ///   - 64-bit integers: RDI, RSI, RDX, RCX, R8, and R9.
+  ///
+  /// - the rest of the arguments are passed on the stack in reverse order.
+  fn lower_func_params(&self, params: &[Symbol]) -> Result<Vec<Instruction>, LoweringError> {
+    let mut instructions = Vec::new();
 
-    Ok(Function { name, instructions })
+    // Get the first 6 parameters for registers and the rest for the stack.
+    let (register_params, stack_params) = params.split_at(params.len().min(6));
+
+    // Pass params in registers.
+    for (idx, param) in register_params.iter().enumerate() {
+      let src = Operand::Reg(ARG_REGISTERS[idx]);
+      let dst = Operand::Pseudo(*param);
+
+      instructions.push(Instruction::Mov { src, dst });
+    }
+
+    // Pass params on the stack.
+    for (idx, param) in stack_params.iter().enumerate() {
+      let src = Operand::Stack(16 + (8 * idx) as isize);
+      let dst = Operand::Pseudo(*param);
+
+      instructions.push(Instruction::Mov { src, dst });
+    }
+
+    Ok(instructions)
+  }
+
+  fn lower_func_call(
+    &self,
+    name: &Symbol,
+    args: &[tac::Value],
+    dst: &tac::Value,
+  ) -> Result<Vec<Instruction>, LoweringError> {
+    let mut instructions = vec![];
+
+    // Get the first 6 parameters for registers and the rest for the stack.
+    let (register_args, stack_args) = args.split_at(args.len().min(6));
+
+    // Adjust stack alignment.
+    let stack_padding = if stack_args.len() % 2 == 0 { 0 } else { 8 };
+
+    if stack_padding > 0 {
+      instructions.push(Instruction::AllocateStack(stack_padding));
+    }
+
+    // Pass arguments in registers.
+    for (idx, arg) in register_args.iter().enumerate() {
+      let src = self.lower_value(arg);
+      let dst = Operand::Reg(ARG_REGISTERS[idx]);
+
+      instructions.push(Instruction::Mov { src, dst });
+    }
+
+    // Pass arguments on the stack in reverse order.
+    for arg in stack_args.iter().rev() {
+      match self.lower_value(arg) {
+        | operand @ (Operand::Imm(..) | Operand::Reg(..)) => {
+          instructions.push(Instruction::Push(operand));
+        },
+        | operand => {
+          instructions.extend([
+            Instruction::Mov {
+              src: operand,
+              dst: Operand::Reg(Reg::AX),
+            },
+            Instruction::Push(Operand::Reg(Reg::AX)),
+          ]);
+        },
+      };
+    }
+
+    // Adjust stack pointer.
+    instructions.push(Instruction::Call(*name));
+
+    // Deallocate stack if needed.
+    let dealloc_bytes = (8 * stack_args.len()) + stack_padding;
+
+    if dealloc_bytes > 0 {
+      instructions.push(Instruction::DeallocateStack(dealloc_bytes));
+    }
+
+    // Get return value.
+    let dst = self.lower_value(dst);
+    let src = Operand::Reg(Reg::AX);
+
+    instructions.push(Instruction::Mov { src, dst });
+
+    Ok(instructions)
+  }
+
+  fn lower_func(&self, function: &tac::Function) -> Result<Function, LoweringError> {
+    let mut instructions = Vec::new();
+
+    instructions.extend(self.lower_func_params(&function.params)?);
+    instructions.extend(self.lower_instructions(&function.instructions)?);
+
+    Ok(Function {
+      name: function.name,
+      instructions,
+    })
   }
 
   fn lower_instructions(
@@ -234,6 +345,10 @@ impl LoweringPass {
         | tac::Instruction::Label(label) => {
           instructions.push(Instruction::Label(*label));
         },
+        | tac::Instruction::FuncCall { name, args, dst } => {
+          let call_instructions = self.lower_func_call(name, args, dst)?;
+          instructions.extend(call_instructions);
+        },
       }
     }
 
@@ -347,9 +462,14 @@ impl PseudoReplacementPass {
     &mut self,
     program: &Program,
   ) -> Result<Program, PseudoReplacementError> {
-    let function = self.replace_pseudos_in_function(&program.function)?;
+    let mut definitions = vec![];
 
-    Ok(Program { function })
+    for function in &program.definitions {
+      let function = self.replace_pseudos_in_function(function)?;
+      definitions.push(function);
+    }
+
+    Ok(Program { definitions })
   }
 
   fn replace_pseudos_in_function(
@@ -409,16 +529,19 @@ impl PseudoReplacementPass {
 
         Ok(Instruction::SetCC { code, dst })
       },
-      | other @ (Instruction::Cdq
-      | Instruction::Ret
+      | Instruction::Push(operand) => {
+        let operand = self.replace_operand(operand);
+
+        Ok(Instruction::Push(operand))
+      },
+      | instruction @ (Instruction::Ret
+      | Instruction::Cdq
+      | Instruction::Label(..)
       | Instruction::Jmp(..)
       | Instruction::JmpCC { .. }
-      | Instruction::Label(..)) => Ok(*other),
-      | Instruction::AllocateStack(..) => {
-        Err(PseudoReplacementError::new(
-          "unexpected AllocateStack instruction",
-        ))
-      },
+      | Instruction::Call { .. }
+      | Instruction::AllocateStack(..)
+      | Instruction::DeallocateStack(..)) => Ok(*instruction),
     }
   }
 
@@ -465,11 +588,11 @@ impl InstructionFixupError {
 ///   `mov`, like many other instructions, can't have memory addresses as both the source and the
 ///   destination. So we make use of scratch register, specifically R10D, to do the rewriting.
 pub struct InstructionFixupPass {
-  stack_size: isize,
+  stack_size: usize,
 }
 
 impl InstructionFixupPass {
-  pub fn new(stack_size: isize) -> Self {
+  pub fn new(stack_size: usize) -> Self {
     Self { stack_size }
   }
 
@@ -478,9 +601,14 @@ impl InstructionFixupPass {
   }
 
   fn fixup_program(&self, program: &Program) -> Result<Program, InstructionFixupError> {
-    let function = self.fixup_function(&program.function)?;
+    let mut definitions = vec![];
 
-    Ok(Program { function })
+    for function in &program.definitions {
+      let function = self.fixup_function(function)?;
+      definitions.push(function);
+    }
+
+    Ok(Program { definitions })
   }
 
   fn fixup_function(&self, function: &Function) -> Result<Function, InstructionFixupError> {

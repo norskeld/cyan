@@ -64,7 +64,7 @@ impl Emitter {
 impl Emitter {
   /// Emits assembly code for the program, including platform-specific sections.
   fn emit_program(&mut self, program: &Program) {
-    self.emit_function(&program.function);
+    self.emit_function(&program.definitions);
 
     if cfg!(target_os = "linux") {
       self

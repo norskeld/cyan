@@ -14,14 +14,7 @@ pub type CaseMap = HashMap<CaseKey, Symbol>;
 
 #[derive(Debug, Located, PartialEq, Eq)]
 pub struct Program {
-  pub function: Function,
-  pub location: Location,
-}
-
-#[derive(Debug, Located, PartialEq, Eq)]
-pub struct Function {
-  pub name: Ident,
-  pub body: Block,
+  pub declarations: Vec<FuncDeclaration>,
   pub location: Location,
 }
 
@@ -38,10 +31,37 @@ pub enum BlockItem {
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
-pub struct Declaration {
+pub enum Declaration {
+  Func(FuncDeclaration),
+  Var(VarDeclaration),
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct VarDeclaration {
   pub name: Ident,
   pub initializer: Option<Expression>,
   pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct FuncDeclaration {
+  pub name: Ident,
+  pub params: Vec<Ident>,
+  /// If body is Some, then it's a definition. Otherwise it's a declaration.
+  pub body: Option<Block>,
+  pub location: Location,
+}
+
+impl FuncDeclaration {
+  /// Whether this node is a declaration.
+  pub fn is_declaration(&self) -> bool {
+    self.body.is_none()
+  }
+
+  /// Whether this node is a definition.
+  pub fn is_definition(&self) -> bool {
+    self.body.is_some()
+  }
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
@@ -111,7 +131,7 @@ pub struct For {
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
 pub enum Initializer {
-  Declaration(Declaration),
+  Declaration(VarDeclaration),
   Expression(Expression),
   None { location: Location },
 }
@@ -155,6 +175,7 @@ pub enum Expression {
   Ternary(Ternary),
   Assignment(Assignment),
   CompoundAssignment(CompoundAssignment),
+  FuncCall(FuncCall),
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
@@ -231,6 +252,13 @@ pub struct CompoundAssignment {
   pub op: BinaryOp,
   pub left: Box<Expression>,
   pub right: Box<Expression>,
+  pub location: Location,
+}
+
+#[derive(Clone, Debug, Located, PartialEq, Eq)]
+pub struct FuncCall {
+  pub name: Ident,
+  pub args: Vec<Expression>,
   pub location: Location,
 }
 

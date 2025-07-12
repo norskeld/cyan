@@ -10,16 +10,17 @@ use crate::symbol::Symbol;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Program {
-  pub function: Function,
+  pub definitions: Vec<Function>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Function {
   pub name: Symbol,
+  pub params: Vec<Symbol>,
   pub instructions: Vec<Instruction>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Instruction {
   Return(Value),
   Unary {
@@ -52,6 +53,11 @@ pub enum Instruction {
     label: Symbol,
   },
   Label(Symbol),
+  FuncCall {
+    name: Symbol,
+    args: Vec<Value>,
+    dst: Value,
+  },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -97,4 +103,27 @@ pub enum BinaryOp {
   Less,
   LessEqual,
   NotEqual,
+}
+
+impl fmt::Display for BinaryOp {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      | BinaryOp::Add => write!(f, "+"),
+      | BinaryOp::Div => write!(f, "/"),
+      | BinaryOp::Mod => write!(f, "%"),
+      | BinaryOp::Mul => write!(f, "*"),
+      | BinaryOp::Sub => write!(f, "-"),
+      | BinaryOp::BitAnd => write!(f, "&"),
+      | BinaryOp::BitOr => write!(f, "|"),
+      | BinaryOp::BitShl => write!(f, "<<"),
+      | BinaryOp::BitShr => write!(f, ">>"),
+      | BinaryOp::BitXor => write!(f, "^"),
+      | BinaryOp::Equal => write!(f, "=="),
+      | BinaryOp::Greater => write!(f, ">"),
+      | BinaryOp::GreaterEqual => write!(f, ">="),
+      | BinaryOp::Less => write!(f, "<"),
+      | BinaryOp::LessEqual => write!(f, "<="),
+      | BinaryOp::NotEqual => write!(f, "!="),
+    }
+  }
 }

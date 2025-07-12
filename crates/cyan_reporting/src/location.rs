@@ -30,11 +30,11 @@ impl Location {
   }
 
   /// Merges two locations into one simply by combining their spans' start and end.
-  pub fn merge(start: &Self, end: &Self) -> Self {
+  pub fn merge(&self, end: &Self) -> Self {
     Self {
-      offsets: Span::new(start.offsets.start, end.offsets.end),
-      lines: Span::new(start.lines.start, end.lines.end),
-      cols: Span::new(start.cols.start, end.cols.end),
+      offsets: Span::new(self.offsets.start, end.offsets.end),
+      lines: Span::new(self.lines.start, end.lines.end),
+      cols: Span::new(self.cols.start, end.cols.end),
     }
   }
 
