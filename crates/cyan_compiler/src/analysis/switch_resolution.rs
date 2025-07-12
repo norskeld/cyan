@@ -44,22 +44,31 @@ impl<'ctx> SwitchResolutionPass<'ctx> {
   }
 
   fn resolve_program(&mut self, program: &Program) -> Result<Program> {
-    let function = self.resolve_function(&program.function)?;
+    let mut declarations = vec![];
+
+    for declaration in &program.declarations {
+      if declaration.is_definition() {
+        let function = self.resolve_function(declaration)?;
+        declarations.push(function);
+      }
+    }
 
     Ok(Program {
-      function,
+      declarations,
       location: program.location,
     })
   }
 
-  fn resolve_function(&mut self, function: &Function) -> Result<Function> {
+  fn resolve_function(&mut self, function: &FuncDeclaration) -> Result<FuncDeclaration> {
     self.inside_switch = false;
     let mut cases = CaseMap::default();
-    let body = self.resolve_block(&function.body, &mut cases)?;
+    // NOTE: We already ensured the body is present.
+    let body = self.resolve_block(&function.body.as_ref().unwrap(), &mut cases)?;
 
-    Ok(Function {
+    Ok(FuncDeclaration {
       name: function.name,
-      body,
+      body: Some(body),
+      params: function.params.clone(),
       location: function.location,
     })
   }
