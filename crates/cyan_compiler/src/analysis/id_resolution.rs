@@ -1,4 +1,4 @@
-use std::collections::hash_map::HashMap;
+use std::collections::HashMap;
 
 use cyan_reporting::{Located, Location};
 use thiserror::Error;
@@ -7,45 +7,73 @@ use crate::context::Context;
 use crate::ir::ast::*;
 use crate::symbol::Symbol;
 
-type Result<T> = std::result::Result<T, VarResolutionError>;
+type Result<T> = std::result::Result<T, IdResolutionError>;
 
-/// A mapping from the user-defined variable names to the unique names to be used later.
-pub type VarMap = HashMap<Symbol, VarEntry>;
+/// A mapping from identifiers to the unique ones to be used later.
+pub type IdMap = HashMap<Symbol, IdEntry>;
 
-trait VarMapExt {
-  /// Copies the variable map and returns a new one with `local` resetted to `false`.
+trait IdMapExt {
+  /// Copies the identifier map and returns a new one with `local` resetted to `false`.
   fn fresh(&self) -> Self;
 }
 
-impl VarMapExt for VarMap {
-  fn fresh(&self) -> VarMap {
+impl IdMapExt for IdMap {
+  fn fresh(&self) -> IdMap {
     self
       .clone()
       .into_iter()
-      .map(|(k, v)| (k, VarEntry { local: false, ..v }))
+      .map(|(k, v)| {
+        (
+          k,
+          IdEntry {
+            current_scope: false,
+            ..v
+          },
+        )
+      })
       .collect()
   }
 }
 
-/// A variable entry.
+/// An identifier.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct VarEntry {
-  /// The unique name of the variable.
+pub struct IdEntry {
+  /// The unique name of the identifier.
   pub name: Symbol,
-  /// Whether the variable is local to the current block scope.
-  pub local: bool,
+  /// Whether the identifier is local to the current block scope.
+  pub current_scope: bool,
+  /// Whether the identifier has linkage associated with it.
+  pub linkage: bool,
+}
+
+impl IdEntry {
+  pub fn for_local_var(name: Symbol) -> Self {
+    Self {
+      name,
+      current_scope: true,
+      linkage: false,
+    }
+  }
+
+  pub fn for_declaration(name: Symbol) -> Self {
+    Self {
+      name,
+      current_scope: true,
+      linkage: true,
+    }
+  }
 }
 
 #[derive(Debug, Error)]
-#[error("variable resolution error {location}: {message}")]
-pub struct VarResolutionError {
+#[error("identifier resolution error {location}: {message}")]
+pub struct IdResolutionError {
   /// The error message.
   message: String,
   /// The location of the error.
   location: Location,
 }
 
-impl VarResolutionError {
+impl IdResolutionError {
   pub fn new(message: impl AsRef<str> + Into<String>, location: Location) -> Self {
     Self {
       message: message.into(),
@@ -54,11 +82,11 @@ impl VarResolutionError {
   }
 }
 
-pub struct VarResolutionPass<'ctx> {
+pub struct IdResolutionPass<'ctx> {
   ctx: &'ctx mut Context,
 }
 
-impl<'ctx> VarResolutionPass<'ctx> {
+impl<'ctx> IdResolutionPass<'ctx> {
   pub fn new(ctx: &'ctx mut Context) -> Self {
     Self { ctx }
   }
@@ -68,34 +96,103 @@ impl<'ctx> VarResolutionPass<'ctx> {
   }
 
   fn resolve_program(&mut self, program: &Program) -> Result<Program> {
-    let function = self.resolve_function(&program.function)?;
+    let mut id_map = IdMap::new();
+    let mut declarations = vec![];
+
+    for declaration in &program.declarations {
+      let declaration = self.resolve_func_declaration(declaration, &mut id_map)?;
+      declarations.push(declaration);
+    }
 
     Ok(Program {
-      function,
+      declarations,
       location: program.location,
     })
   }
 
-  fn resolve_function(&mut self, function: &Function) -> Result<Function> {
-    let mut variables = VarMap::new();
+  fn resolve_func_declaration(
+    &mut self,
+    function: &FuncDeclaration,
+    id_map: &mut IdMap,
+  ) -> Result<FuncDeclaration> {
+    match id_map.get(&function.name) {
+      | Some(entry) if entry.current_scope && !entry.linkage => {
+        Err(IdResolutionError::new(
+          "duplicate function declaration",
+          function.location,
+        ))
+      },
+      | _ => {
+        // Set the prefix for temporary variables to current function's name.
+        self.ctx.var_prefix = *function.name;
 
-    // Set the prefix for temporary variables to current function's name.
-    self.ctx.var_prefix = function.name.value;
+        // Add current function to the identifiers map.
+        id_map.insert(*function.name, IdEntry::for_declaration(*function.name));
 
-    let body = self.resolve_block(&function.body, &mut variables)?;
+        let mut inner_map = id_map.fresh();
 
-    Ok(Function {
-      name: function.name,
-      body,
-      location: function.location,
-    })
+        // Resolve function parameters.
+        let params = self.resolve_params(&function.params, &mut inner_map)?;
+
+        // Resolve function body.
+        let body = if let Some(body) = function.body.as_ref() {
+          self.resolve_block(body, &mut inner_map).map(Some)?
+        } else {
+          None
+        };
+
+        Ok(FuncDeclaration {
+          name: function.name,
+          params,
+          body,
+          location: function.location,
+        })
+      },
+    }
   }
 
-  fn resolve_block(&mut self, block: &Block, variables: &mut VarMap) -> Result<Block> {
+  fn resolve_local_declaration(
+    &mut self,
+    declaration: &Declaration,
+    id_map: &mut IdMap,
+  ) -> Result<Declaration> {
+    match declaration {
+      | Declaration::Var(var) => {
+        let resolved = self.resolve_local_var_declaration(var, id_map)?;
+
+        Ok(Declaration::Var(resolved))
+      },
+      | Declaration::Func(func) if func.is_definition() => {
+        Err(IdResolutionError::new(
+          "nested function definitions are not allowed",
+          func.name.location,
+        ))
+      },
+      | Declaration::Func(func) => {
+        let resolved = self.resolve_func_declaration(func, id_map)?;
+
+        Ok(Declaration::Func(resolved))
+      },
+    }
+  }
+
+  fn resolve_params(&mut self, params: &[Ident], id_map: &mut IdMap) -> Result<Vec<Ident>> {
+    let mut resolved_params = vec![];
+
+    for param in params {
+      let param = self.resolve_local_var(param, id_map)?;
+      resolved_params.push(param);
+    }
+
+    Ok(resolved_params)
+  }
+
+  fn resolve_block(&mut self, block: &Block, id_map: &mut IdMap) -> Result<Block> {
     let mut body = Vec::new();
 
     for block_item in &block.body {
-      body.push(self.resolve_block_item(block_item, variables)?);
+      let block_item = self.resolve_block_item(block_item, id_map)?;
+      body.push(block_item);
     }
 
     Ok(Block {
@@ -107,94 +204,85 @@ impl<'ctx> VarResolutionPass<'ctx> {
   fn resolve_block_item(
     &mut self,
     block_item: &BlockItem,
-    variables: &mut VarMap,
+    id_map: &mut IdMap,
   ) -> Result<BlockItem> {
     match block_item {
       | BlockItem::Declaration(declaration) => {
         self
-          .resolve_declaration(declaration, variables)
+          .resolve_local_declaration(declaration, id_map)
           .map(BlockItem::Declaration)
       },
       | BlockItem::Statement(statement) => {
         self
-          .resolve_statement(statement, variables)
+          .resolve_statement(statement, id_map)
           .map(BlockItem::Statement)
       },
     }
   }
 
-  fn resolve_declaration(
+  fn resolve_local_var_declaration(
     &mut self,
-    declaration: &Declaration,
-    variables: &mut VarMap,
-  ) -> Result<Declaration> {
-    match variables.get(&declaration.name.value) {
-      | Some(entry) if entry.local => {
-        Err(VarResolutionError::new(
+    declaration: &VarDeclaration,
+    id_map: &mut IdMap,
+  ) -> Result<VarDeclaration> {
+    let name = self.resolve_local_var(&declaration.name, id_map)?;
+    let initializer = self.resolve_optional_expression(&declaration.initializer, id_map)?;
+
+    Ok(VarDeclaration {
+      name,
+      initializer,
+      location: declaration.location,
+    })
+  }
+
+  fn resolve_local_var(&mut self, ident: &Ident, id_map: &mut IdMap) -> Result<Ident> {
+    match id_map.get(&ident.value) {
+      | Some(entry) if entry.current_scope => {
+        Err(IdResolutionError::new(
           "duplicate variable declaration",
-          declaration.name.location,
+          ident.location,
         ))
       },
       | _ => {
         // Generate unique name and associate a user-defined name with it.
         let unique_name = self.ctx.gen_temporary();
 
-        variables.insert(
-          declaration.name.value,
-          VarEntry {
-            name: unique_name,
-            local: true,
-          },
-        );
+        // Add the variable identifier to the map.
+        id_map.insert(ident.value, IdEntry::for_local_var(unique_name));
 
-        // Resolve initializer if there is one.
-        let resolved_init = declaration
-          .initializer
-          .as_ref()
-          .map(|init| self.resolve_expression(init, variables))
-          .transpose()?;
-
-        Ok(Declaration {
-          name: Ident {
-            value: unique_name,
-            location: declaration.name.location, // FIXME: This is probably incorrect.
-          },
-          initializer: resolved_init,
-          location: declaration.location,
+        Ok(Ident {
+          value: unique_name,
+          location: ident.location,
         })
       },
     }
   }
 
-  fn resolve_statement(
-    &mut self,
-    statement: &Statement,
-    variables: &mut VarMap,
-  ) -> Result<Statement> {
+  fn resolve_statement(&mut self, statement: &Statement, id_map: &mut IdMap) -> Result<Statement> {
     match statement {
       | Statement::Return(expression) => {
         self
-          .resolve_expression(expression, variables)
+          .resolve_expression(expression, id_map)
           .map(Statement::Return)
       },
       | Statement::Expression(expression) => {
         self
-          .resolve_expression(expression, variables)
+          .resolve_expression(expression, id_map)
           .map(Statement::Expression)
       },
       | Statement::If(conditional) => {
         let condition = self
-          .resolve_expression(&conditional.condition, variables)
+          .resolve_expression(&conditional.condition, id_map)
           .map(Box::new)?;
 
         let then = self
-          .resolve_statement(&conditional.then, variables)
+          .resolve_statement(&conditional.then, id_map)
           .map(Box::new)?;
 
         let otherwise = conditional
           .otherwise
           .as_ref()
-          .map(|otherwise| self.resolve_statement(otherwise, variables))
+          .map(|otherwise| self.resolve_statement(otherwise, id_map))
           .transpose()?
           .map(Box::new);
 
@@ -211,8 +299,8 @@ impl<'ctx> VarResolutionPass<'ctx> {
         })
       },
       | Statement::Block(block) => {
-        let mut local_vars = variables.fresh();
-        let block = self.resolve_block(block, &mut local_vars)?;
+        let mut local_ids = id_map.fresh();
+        let block = self.resolve_block(block, &mut local_ids)?;
 
         Ok(Statement::Block(Block {
           body: block.body,
@@ -222,7 +310,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
       | Statement::Goto(goto) => Ok(Statement::Goto(*goto)),
       | Statement::Labeled(labeled) => {
         let statement = self
-          .resolve_statement(&labeled.statement, variables)
+          .resolve_statement(&labeled.statement, id_map)
           .map(Box::new)?;
 
         Ok(Statement::Labeled(Labeled {
@@ -232,7 +320,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
         }))
       },
       | Statement::For(for_) => {
-        let mut local_vars = variables.fresh();
+        let mut local_vars = id_map.fresh();
         let initializer = self.resolve_initializer(&for_.initializer, &mut local_vars)?;
         let condition = self.resolve_optional_expression(&for_.condition, &mut local_vars)?;
 
@@ -253,11 +341,8 @@ impl<'ctx> VarResolutionPass<'ctx> {
         }))
       },
       | Statement::While(while_) => {
-        let condition = self.resolve_expression(&while_.condition, variables)?;
-
-        let body = self
-          .resolve_statement(&while_.body, variables)
-          .map(Box::new)?;
+        let condition = self.resolve_expression(&while_.condition, id_map)?;
+        let body = self.resolve_statement(&while_.body, id_map).map(Box::new)?;
 
         Ok(Statement::While(While {
           condition,
@@ -268,10 +353,10 @@ impl<'ctx> VarResolutionPass<'ctx> {
       },
       | Statement::DoWhile(dowhile) => {
         let body = self
-          .resolve_statement(&dowhile.body, variables)
+          .resolve_statement(&dowhile.body, id_map)
           .map(Box::new)?;
 
-        let condition = self.resolve_expression(&dowhile.condition, variables)?;
+        let condition = self.resolve_expression(&dowhile.condition, id_map)?;
 
         Ok(Statement::DoWhile(DoWhile {
           condition,
@@ -282,12 +367,10 @@ impl<'ctx> VarResolutionPass<'ctx> {
       },
       | Statement::Switch(switch) => {
         let control = self
-          .resolve_expression(&switch.control, variables)
+          .resolve_expression(&switch.control, id_map)
           .map(Box::new)?;
 
-        let body = self
-          .resolve_statement(&switch.body, variables)
-          .map(Box::new)?;
+        let body = self.resolve_statement(&switch.body, id_map).map(Box::new)?;
 
         Ok(Statement::Switch(Switch {
           control,
@@ -298,9 +381,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
         }))
       },
       | Statement::Case(case) => {
-        let body = self
-          .resolve_statement(&case.body, variables)
-          .map(Box::new)?;
+        let body = self.resolve_statement(&case.body, id_map).map(Box::new)?;
 
         Ok(Statement::Case(Case {
           body,
@@ -311,7 +392,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
       },
       | Statement::DefaultCase(default_case) => {
         let body = self
-          .resolve_statement(&default_case.body, variables)
+          .resolve_statement(&default_case.body, id_map)
           .map(Box::new)?;
 
         Ok(Statement::DefaultCase(DefaultCase {
@@ -328,16 +409,16 @@ impl<'ctx> VarResolutionPass<'ctx> {
   fn resolve_initializer(
     &mut self,
     initializer: &Initializer,
-    variables: &mut VarMap,
+    id_map: &mut IdMap,
   ) -> Result<Initializer> {
     match initializer {
       | Initializer::Declaration(declaration) => {
-        let resolved_declaration = self.resolve_declaration(declaration, variables)?;
+        let resolved_declaration = self.resolve_local_var_declaration(declaration, id_map)?;
 
         Ok(Initializer::Declaration(resolved_declaration))
       },
       | Initializer::Expression(expression) => {
-        let resolved_expression = self.resolve_expression(expression, variables)?;
+        let resolved_expression = self.resolve_expression(expression, id_map)?;
 
         Ok(Initializer::Expression(resolved_expression))
       },
@@ -352,30 +433,26 @@ impl<'ctx> VarResolutionPass<'ctx> {
   fn resolve_optional_expression(
     &self,
     expression: &Option<Expression>,
-    variables: &mut VarMap,
+    id_map: &mut IdMap,
   ) -> Result<Option<Expression>> {
     expression
       .as_ref()
-      .map(|it| self.resolve_expression(it, variables))
+      .map(|it| self.resolve_expression(it, id_map))
       .transpose()
   }
 
   #[allow(clippy::only_used_in_recursion)]
-  fn resolve_expression(
-    &self,
-    expression: &Expression,
-    variables: &mut VarMap,
-  ) -> Result<Expression> {
+  fn resolve_expression(&self, expression: &Expression, id_map: &mut IdMap) -> Result<Expression> {
     match expression {
       | Expression::Constant(int) => Ok(Expression::Constant(*int)),
       | Expression::Var(ident) => {
-        if let Some(entry) = variables.get(&ident.value) {
+        if let Some(entry) = id_map.get(&ident.value) {
           Ok(Expression::Var(Ident {
             value: entry.name,
             location: ident.location,
           }))
         } else {
-          Err(VarResolutionError::new(
+          Err(IdResolutionError::new(
             format!("variable '{}' is undefined", ident.value),
             ident.location,
           ))
@@ -383,13 +460,13 @@ impl<'ctx> VarResolutionPass<'ctx> {
       },
       | Expression::Unary(unary) => {
         if let UnaryOp::Dec | UnaryOp::Inc = unary.op {
-          return Err(VarResolutionError::new(
+          return Err(IdResolutionError::new(
             "operand of ++/-- must be a variable",
             unary.location,
           ));
         }
 
-        let expression = self.resolve_expression(&unary.expression, variables)?;
+        let expression = self.resolve_expression(&unary.expression, id_map)?;
 
         Ok(Expression::Unary(Unary {
           op: unary.op,
@@ -398,8 +475,8 @@ impl<'ctx> VarResolutionPass<'ctx> {
         }))
       },
       | Expression::Binary(binary) => {
-        let left = self.resolve_expression(&binary.left, variables)?;
-        let right = self.resolve_expression(&binary.right, variables)?;
+        let left = self.resolve_expression(&binary.left, id_map)?;
+        let right = self.resolve_expression(&binary.right, id_map)?;
 
         Ok(Expression::Binary(Binary {
           op: binary.op,
@@ -410,8 +487,8 @@ impl<'ctx> VarResolutionPass<'ctx> {
       },
       | Expression::Assignment(assignment) => {
         if let Expression::Var(..) = &*assignment.left {
-          let left = self.resolve_expression(&assignment.left, variables)?;
-          let right = self.resolve_expression(&assignment.right, variables)?;
+          let left = self.resolve_expression(&assignment.left, id_map)?;
+          let right = self.resolve_expression(&assignment.right, id_map)?;
 
           Ok(Expression::Assignment(Assignment {
             left: Box::new(left),
@@ -419,7 +496,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
             location: assignment.location,
           }))
         } else {
-          Err(VarResolutionError::new(
+          Err(IdResolutionError::new(
             "left-hand expression of assignment must be a modifiable lvalue",
             *assignment.left.location(),
           ))
@@ -427,8 +504,8 @@ impl<'ctx> VarResolutionPass<'ctx> {
       },
       | Expression::CompoundAssignment(assignment) => {
         if let Expression::Var(..) = &*assignment.left {
-          let left = self.resolve_expression(&assignment.left, variables)?;
-          let right = self.resolve_expression(&assignment.right, variables)?;
+          let left = self.resolve_expression(&assignment.left, id_map)?;
+          let right = self.resolve_expression(&assignment.right, id_map)?;
 
           Ok(Expression::CompoundAssignment(CompoundAssignment {
             op: assignment.op,
@@ -437,7 +514,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
             location: assignment.location,
           }))
         } else {
-          Err(VarResolutionError::new(
+          Err(IdResolutionError::new(
             "left-hand expression of compound assignment must be a modifiable lvalue",
             *assignment.left.location(),
           ))
@@ -445,7 +522,7 @@ impl<'ctx> VarResolutionPass<'ctx> {
       },
       | Expression::Postfix(postfix) => {
         if let Expression::Var(..) = &*postfix.operand {
-          let operand = self.resolve_expression(&postfix.operand, variables)?;
+          let operand = self.resolve_expression(&postfix.operand, id_map)?;
 
           Ok(Expression::Postfix(Postfix {
             op: postfix.op,
@@ -453,16 +530,16 @@ impl<'ctx> VarResolutionPass<'ctx> {
             location: postfix.location,
           }))
         } else {
-          Err(VarResolutionError::new(
+          Err(IdResolutionError::new(
             "operand of postfix expression must be a modifiable lvalue",
             *postfix.operand.location(),
           ))
         }
       },
       | Expression::Ternary(ternary) => {
-        let condition = self.resolve_expression(&ternary.condition, variables)?;
-        let then = self.resolve_expression(&ternary.then, variables)?;
-        let otherwise = self.resolve_expression(&ternary.otherwise, variables)?;
+        let condition = self.resolve_expression(&ternary.condition, id_map)?;
+        let then = self.resolve_expression(&ternary.then, id_map)?;
+        let otherwise = self.resolve_expression(&ternary.otherwise, id_map)?;
 
         Ok(Expression::Ternary(Ternary {
           condition: Box::new(condition),
@@ -470,6 +547,30 @@ impl<'ctx> VarResolutionPass<'ctx> {
           otherwise: Box::new(otherwise),
           location: ternary.location,
         }))
+      },
+      | Expression::FuncCall(func_call) => {
+        if let Some(entry) = id_map.get(&*func_call.name).cloned() {
+          let mut args = vec![];
+
+          for arg in &func_call.args {
+            let arg = self.resolve_expression(arg, id_map)?;
+            args.push(arg);
+          }
+
+          Ok(Expression::FuncCall(FuncCall {
+            name: Ident {
+              value: entry.name,
+              location: func_call.name.location,
+            },
+            args,
+            location: func_call.location,
+          }))
+        } else {
+          Err(IdResolutionError::new(
+            format!("function '{}' is undefined", *func_call.name),
+            func_call.name.location,
+          ))
+        }
       },
     }
   }
