@@ -43,7 +43,7 @@ impl<'ctx> LoopLabelingPass<'ctx> {
 
     for declaration in &program.declarations {
       if declaration.is_definition() {
-        let function = self.label_function(&declaration, (&None, &None))?;
+        let function = self.label_function(declaration, (&None, &None))?;
         declarations.push(function);
       }
     }
@@ -60,7 +60,7 @@ impl<'ctx> LoopLabelingPass<'ctx> {
     current_labels: (&Option<Symbol>, &Option<Symbol>),
   ) -> Result<FuncDeclaration> {
     // NOTE: We already ensured the body is present.
-    let body = self.label_block(&function.body.as_ref().unwrap(), current_labels)?;
+    let body = self.label_block(function.body.as_ref().unwrap(), current_labels)?;
 
     Ok(FuncDeclaration {
       name: function.name,

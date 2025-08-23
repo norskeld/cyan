@@ -63,7 +63,7 @@ impl<'ctx> SwitchResolutionPass<'ctx> {
     self.inside_switch = false;
     let mut cases = CaseMap::default();
     // NOTE: We already ensured the body is present.
-    let body = self.resolve_block(&function.body.as_ref().unwrap(), &mut cases)?;
+    let body = self.resolve_block(function.body.as_ref().unwrap(), &mut cases)?;
 
     Ok(FuncDeclaration {
       name: function.name,
