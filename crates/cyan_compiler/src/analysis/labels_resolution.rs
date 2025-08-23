@@ -4,6 +4,7 @@ use cyan_reporting::Location;
 use thiserror::Error;
 
 use crate::ir::ast::*;
+use crate::symbol::Symbol;
 
 type Result<T> = std::result::Result<T, LabelsResolutionError>;
 
@@ -29,6 +30,7 @@ impl LabelsResolutionError {
 struct LabelsResolutionState {
   defined_labels: HashSet<Ident>,
   used_labels: HashSet<Ident>,
+  current_function_name: Symbol,
 }
 
 impl LabelsResolutionState {
@@ -74,68 +76,94 @@ impl LabelsResolutionPass {
     }
   }
 
-  pub fn run(&mut self, program: &Program) -> Result<()> {
-    self.resolve_function(&program.function)
-  }
+  pub fn run(&mut self, program: Program) -> Result<Program> {
+    let mut declarations = vec![];
 
-  fn resolve_function(&mut self, function: &Function) -> Result<()> {
-    self.resolve_block(&function.body)?;
-
-    let diff = self.state.diff();
-
-    // TODO: When diagnostics are implemented, we should report _all_ errors.
-    if let Some(ident) = diff.and_then(|it| it.first().cloned()) {
-      Err(LabelsResolutionError::new(
-        format!("label '{}' was referenced but not defined", ident.value),
-        ident.location,
-      ))
-    } else {
-      Ok(())
-    }
-  }
-
-  fn resolve_block(&mut self, block: &Block) -> Result<()> {
-    for block_item in &block.body {
-      self.resolve_block_item(block_item)?;
+    for declaration in program.declarations {
+      let declaration = self.resolve_function(declaration)?;
+      declarations.push(declaration);
     }
 
-    Ok(())
+    Ok(Program {
+      declarations,
+      location: program.location,
+    })
   }
 
-  fn resolve_block_item(&mut self, block_item: &BlockItem) -> Result<()> {
+  fn resolve_function(&mut self, func: FuncDeclaration) -> Result<FuncDeclaration> {
+    if let Some(body) = func.body {
+      let body = self.resolve_block(body)?;
+      let diff = self.state.diff();
+
+      // TODO: When diagnostics are implemented, we should report _all_ errors, not the first one.
+      return if let Some(ident) = diff.and_then(|it| it.first().cloned()) {
+        Err(LabelsResolutionError::new(
+          format!("label '{}' was referenced but not defined", ident.value),
+          ident.location,
+        ))
+      } else {
+        Ok(FuncDeclaration {
+          name: func.name,
+          body: Some(body),
+          params: func.params.clone(),
+          location: func.location,
+        })
+      };
+    }
+
+    Ok(func.clone())
+  }
+
+  fn resolve_block(&mut self, block: Block) -> Result<Block> {
+    let mut body = Vec::with_capacity(block.body.len());
+
+    for block_item in block.body {
+      let block_item = self.resolve_block_item(block_item)?;
+      body.push(block_item);
+    }
+
+    Ok(Block {
+      body,
+      location: block.location,
+    })
+  }
+
+  fn resolve_block_item(&mut self, block_item: BlockItem) -> Result<BlockItem> {
     match block_item {
-      | BlockItem::Declaration(..) => Ok(()),
-      | BlockItem::Statement(statement) => self.resolve_statement(statement),
+      | BlockItem::Declaration(..) => Ok(block_item),
+      | BlockItem::Statement(statement) => {
+        self.resolve_statement(statement).map(BlockItem::Statement)
+      },
     }
   }
 
-  fn resolve_statement(&mut self, statement: &Statement) -> Result<()> {
+  fn resolve_statement(&mut self, statement: Statement) -> Result<Statement> {
     match statement {
       | Statement::Goto(goto) => self.resolve_goto(goto),
       | Statement::Labeled(labeled) => self.resolve_labeled(labeled),
       | Statement::If(conditional) => self.resolve_if(conditional),
-      | Statement::Block(block) => self.resolve_block(block),
-      | Statement::For(for_) => self.resolve_statement(&for_.body),
-      | Statement::While(while_) => self.resolve_statement(&while_.body),
-      | Statement::DoWhile(do_while) => self.resolve_statement(&do_while.body),
-      | Statement::Switch(switch) => self.resolve_statement(&switch.body),
-      | Statement::Case(case) => self.resolve_statement(&case.body),
-      | Statement::DefaultCase(default_case) => self.resolve_statement(&default_case.body),
+      | Statement::Block(block) => self.resolve_block(block).map(Statement::Block),
+      | Statement::For(for_) => self.resolve_statement(*for_.body),
+      | Statement::While(while_) => self.resolve_statement(*while_.body),
+      | Statement::DoWhile(do_while) => self.resolve_statement(*do_while.body),
+      | Statement::Switch(switch) => self.resolve_statement(*switch.body),
+      | Statement::Case(case) => self.resolve_statement(*case.body),
+      | Statement::DefaultCase(default_case) => self.resolve_statement(*default_case.body),
       | Statement::Expression(..)
       | Statement::Break(..)
       | Statement::Continue(..)
       | Statement::Return(..)
-      | Statement::Null { .. } => Ok(()),
+      | Statement::Null { .. } => Ok(statement.clone()),
     }
   }
 
-  fn resolve_goto(&mut self, goto: &Goto) -> Result<()> {
+  fn resolve_goto(&mut self, goto: Goto) -> Result<Statement> {
     self.state.use_label(goto.label);
 
-    Ok(())
+    Ok(Statement::Goto(goto))
   }
 
-  fn resolve_labeled(&mut self, labeled: &Labeled) -> Result<()> {
+  fn resolve_labeled(&mut self, labeled: Labeled) -> Result<Statement> {
     if let Some(label) = self.state.get_defined_label(&labeled.label) {
       return Err(LabelsResolutionError::new(
         format!("duplicate label '{}'", label.value),
@@ -145,15 +173,15 @@ impl LabelsResolutionPass {
 
     self.state.define_label(labeled.label);
 
-    self.resolve_statement(&labeled.statement)
+    self.resolve_statement(*labeled.statement)
   }
 
-  fn resolve_if(&mut self, conditional: &If) -> Result<()> {
-    self.resolve_statement(&conditional.then)?;
+  fn resolve_if(&mut self, conditional: If) -> Result<Statement> {
+    self.resolve_statement(*conditional.clone().then)?;
 
-    match &conditional.otherwise {
-      | Some(otherwise) => self.resolve_statement(otherwise),
-      | None => Ok(()),
+    match conditional.otherwise {
+      | Some(otherwise) => self.resolve_statement(*otherwise),
+      | None => Ok(Statement::If(conditional)),
     }
   }
 }
