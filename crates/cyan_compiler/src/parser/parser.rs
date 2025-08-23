@@ -145,7 +145,7 @@ impl Parser {
     let location = Location::default().merge(
       &declarations
         .last()
-        .map_or_else(|| Location::default(), |it| it.location),
+        .map_or_else(Location::default, |it| it.location),
     );
 
     Ok(Program {

@@ -451,11 +451,11 @@ impl PseudoReplacementPass {
     }
   }
 
-  pub fn run(&mut self, program: &Program) -> Result<(Program, isize), PseudoReplacementError> {
+  pub fn run(&mut self, program: &Program) -> Result<(Program, usize), PseudoReplacementError> {
     let program = self.replace_pseudos_in_program(program)?;
-    let offset = self.offset;
+    let offset = self.offset.clamp(0, isize::MAX) as usize;
 
-    Ok((program, offset.abs()))
+    Ok((program, offset))
   }
 
   fn replace_pseudos_in_program(

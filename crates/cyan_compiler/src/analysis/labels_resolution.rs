@@ -4,7 +4,6 @@ use cyan_reporting::Location;
 use thiserror::Error;
 
 use crate::ir::ast::*;
-use crate::symbol::Symbol;
 
 type Result<T> = std::result::Result<T, LabelsResolutionError>;
 
@@ -30,7 +29,6 @@ impl LabelsResolutionError {
 struct LabelsResolutionState {
   defined_labels: HashSet<Ident>,
   used_labels: HashSet<Ident>,
-  current_function_name: Symbol,
 }
 
 impl LabelsResolutionState {

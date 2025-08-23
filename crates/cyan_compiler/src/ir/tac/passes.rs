@@ -48,7 +48,7 @@ impl<'ctx> LoweringPass<'ctx> {
 
     for function in &program.declarations {
       if function.is_definition() {
-        definitions.push(self.lower_func_declaration(&function)?);
+        definitions.push(self.lower_func_declaration(function)?);
       }
     }
 
