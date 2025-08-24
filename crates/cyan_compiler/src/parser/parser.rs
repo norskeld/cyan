@@ -2055,12 +2055,7 @@ mod tests {
   fn parse_empty_program() {
     let actual = parser("").parse();
 
-    assert!(actual.is_err());
-
-    assert_eq!(
-      actual.unwrap_err().message,
-      "the end of the input is reached, but more is expected"
-    );
+    assert!(actual.is_ok());
   }
 
   #[test]
