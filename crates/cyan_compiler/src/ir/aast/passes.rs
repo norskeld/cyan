@@ -419,18 +419,10 @@ impl PseudoReplacementError {
   }
 }
 
+#[derive(Default)]
 struct PseudoReplacementState {
   offset: isize,
   offset_map: HashMap<Symbol, isize>,
-}
-
-impl Default for PseudoReplacementState {
-  fn default() -> Self {
-    Self {
-      offset: 0,
-      offset_map: HashMap::new(),
-    }
-  }
 }
 
 /// Pass to replace pseudoregisters.
