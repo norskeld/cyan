@@ -211,16 +211,15 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   let aast = lowerer.lower(&tac)?;
 
   // Replace pseudoregisters and get the stack size.
-  let mut pass = aast::PseudoReplacementPass::new();
-  let (aast, stack_size) = pass.run(&aast)?;
+  let mut pass = aast::PseudoReplacementPass::new(&mut ctx);
+  let aast = pass.run(&aast)?;
 
   // Fix up instructions.
-  let pass = aast::InstructionFixupPass::new(stack_size);
+  let pass = aast::InstructionFixupPass::new(&mut ctx);
   let aast = pass.run(&aast)?;
 
   if options.should_print(CompileStage::Codegen) {
     println!("{}", boxed("Stage | Codegen (AAST)"));
-    println!("stack_size = {stack_size}");
     println!("{aast:#?}\n");
   }
 

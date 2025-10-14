@@ -1,4 +1,5 @@
 use crate::symbol::Symbol;
+use crate::symtable::Symtable;
 
 /// The compiler context.
 ///
@@ -9,6 +10,8 @@ pub struct Context {
   pub var_prefix: Symbol,
   /// The current variables/labels counter.
   pub var_counter: usize,
+  /// The symbol table.
+  pub symtable: Symtable,
 }
 
 impl Context {
@@ -16,6 +19,7 @@ impl Context {
     Self {
       var_prefix: "global".to_string().into(),
       var_counter: 0,
+      symtable: Symtable::new(),
     }
   }
 

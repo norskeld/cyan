@@ -47,6 +47,7 @@ pub struct IdEntry {
 }
 
 impl IdEntry {
+  /// Creates an identifier entry for a local variable.
   pub fn for_local_var(name: Symbol) -> Self {
     Self {
       name,
@@ -55,6 +56,7 @@ impl IdEntry {
     }
   }
 
+  /// Creates an identifier entry for a declaration. It has linkage associated with it.
   pub fn for_declaration(name: Symbol) -> Self {
     Self {
       name,
