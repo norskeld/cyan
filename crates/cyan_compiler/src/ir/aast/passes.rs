@@ -2,8 +2,10 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
+use crate::context::Context;
 use crate::ir::aast::*;
 use crate::ir::tac;
+use crate::utils;
 
 /// Argument registers.
 const ARG_REGISTERS: [Reg; 6] = [Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
@@ -35,7 +37,6 @@ impl LoweringPass {
   }
 
   fn lower_program(&self, program: &tac::Program) -> Result<Program, LoweringError> {
-    // let function = self.lower_function(&program.function)?;
     let mut definitions = Vec::new();
 
     for function in &program.definitions {
@@ -128,7 +129,7 @@ impl LoweringPass {
     instructions.push(Instruction::Call(*name));
 
     // Deallocate stack if needed.
-    let dealloc_bytes = (8 * stack_args.len()) + stack_padding;
+    let dealloc_bytes = (8 * stack_args.len() as isize) + stack_padding;
 
     if dealloc_bytes > 0 {
       instructions.push(Instruction::DeallocateStack(dealloc_bytes));
@@ -418,44 +419,32 @@ impl PseudoReplacementError {
   }
 }
 
-/// Pass to replace pseudoregisters.
-///
-/// This pass replaces each `Pseudo` operand with a `Stack` operand, leaving the rest of the AAST
-/// unchanged. We replace the first temporary variable we see with `Stack(-4)`, the next with
-/// `Stack(-8)`, and so on. We subtract 4 for each new variable, since every temporary variable is a
-/// 4-byte integer.
-///
-/// We also maintain a map from identifiers to offsets as we go so we can replace each
-/// pseudoregister with the same address on the stack every time it appears. For example, if we
-/// process the instructions:
-///
-/// ```text
-/// Mov(Imm(2), Pseudo("a"))
-/// Unary(Neg, Pseudo("a"))
-/// ```
-///
-/// We replace `Pseudo("a")` with the same `Stack` operand in both instructions.
-///
-/// This compiler pass also returns the stack offset of the final temporary variable, because
-/// that tells us how many bytes to allocate on the stack in the next pass (instructions fixup).
-pub struct PseudoReplacementPass {
+struct PseudoReplacementState {
   offset: isize,
   offset_map: HashMap<Symbol, isize>,
 }
 
-impl PseudoReplacementPass {
-  pub fn new() -> Self {
+impl Default for PseudoReplacementState {
+  fn default() -> Self {
     Self {
       offset: 0,
       offset_map: HashMap::new(),
     }
   }
+}
 
-  pub fn run(&mut self, program: &Program) -> Result<(Program, usize), PseudoReplacementError> {
-    let program = self.replace_pseudos_in_program(program)?;
-    let offset = self.offset.clamp(0, isize::MAX) as usize;
+/// Pass to replace pseudoregisters.
+pub struct PseudoReplacementPass<'ctx> {
+  ctx: &'ctx mut Context,
+}
 
-    Ok((program, offset))
+impl<'ctx> PseudoReplacementPass<'ctx> {
+  pub fn new(ctx: &'ctx mut Context) -> Self {
+    Self { ctx }
+  }
+
+  pub fn run(&mut self, program: &Program) -> Result<Program, PseudoReplacementError> {
+    self.replace_pseudos_in_program(program)
   }
 
   fn replace_pseudos_in_program(
@@ -476,11 +465,19 @@ impl PseudoReplacementPass {
     &mut self,
     function: &Function,
   ) -> Result<Function, PseudoReplacementError> {
-    let mut instructions = Vec::new();
+    let mut state = PseudoReplacementState::default();
+    let mut instructions = vec![];
 
     for instruction in &function.instructions {
-      instructions.push(self.replace_pseudos_in_instruction(instruction)?);
+      let instruction = self.replace_pseudos_in_instruction(instruction, &mut state)?;
+      instructions.push(instruction);
     }
+
+    // Set the stack frame size for the function.
+    self
+      .ctx
+      .symtable
+      .set_stack_frame_size(&function.name, state.offset);
 
     Ok(Function {
       name: function.name,
@@ -491,46 +488,47 @@ impl PseudoReplacementPass {
   fn replace_pseudos_in_instruction(
     &mut self,
     instruction: &Instruction,
+    state: &mut PseudoReplacementState,
   ) -> Result<Instruction, PseudoReplacementError> {
     match instruction {
       | Instruction::Mov { src, dst } => {
-        let src = self.replace_operand(src);
-        let dst = self.replace_operand(dst);
+        let src = self.replace_operand(src, state);
+        let dst = self.replace_operand(dst, state);
 
         Ok(Instruction::Mov { src, dst })
       },
       | Instruction::Unary { op, operand } => {
         let op = *op;
-        let operand = self.replace_operand(operand);
+        let operand = self.replace_operand(operand, state);
 
         Ok(Instruction::Unary { op, operand })
       },
       | Instruction::Binary { op, src, dst } => {
         let op = *op;
-        let src = self.replace_operand(src);
-        let dst = self.replace_operand(dst);
+        let src = self.replace_operand(src, state);
+        let dst = self.replace_operand(dst, state);
 
         Ok(Instruction::Binary { op, src, dst })
       },
       | Instruction::Idiv(operand) => {
-        let operand = self.replace_operand(operand);
+        let operand = self.replace_operand(operand, state);
 
         Ok(Instruction::Idiv(operand))
       },
       | Instruction::Cmp { left, right } => {
-        let left = self.replace_operand(left);
-        let right = self.replace_operand(right);
+        let left = self.replace_operand(left, state);
+        let right = self.replace_operand(right, state);
 
         Ok(Instruction::Cmp { left, right })
       },
       | Instruction::SetCC { code, dst } => {
         let code = *code;
-        let dst = self.replace_operand(dst);
+        let dst = self.replace_operand(dst, state);
 
         Ok(Instruction::SetCC { code, dst })
       },
       | Instruction::Push(operand) => {
-        let operand = self.replace_operand(operand);
+        let operand = self.replace_operand(operand, state);
 
         Ok(Instruction::Push(operand))
       },
@@ -545,19 +543,19 @@ impl PseudoReplacementPass {
     }
   }
 
-  fn replace_operand(&mut self, operand: &Operand) -> Operand {
+  fn replace_operand(&mut self, operand: &Operand, state: &mut PseudoReplacementState) -> Operand {
     match operand {
       | Operand::Pseudo(identifier) => {
         // We've already assigned this operand a stack slot, so we don't need to do anything.
-        if let Some(offset) = self.offset_map.get(identifier) {
+        if let Some(offset) = state.offset_map.get(identifier) {
           Operand::Stack(*offset)
         }
         // Otherwise we need to assign a stack slot to this operand.
         else {
-          self.offset -= 4;
-          self.offset_map.insert(*identifier, self.offset);
+          state.offset -= 4;
+          state.offset_map.insert(*identifier, state.offset);
 
-          Operand::Stack(self.offset)
+          Operand::Stack(state.offset)
         }
       },
       | other => *other,
@@ -576,24 +574,13 @@ impl InstructionFixupError {
 }
 
 /// Pass to fix up instructions.
-///
-/// This pass does the following:
-///
-/// - Inserts an `AllocateStack` instruction at the beginning of the instruction list with the stack
-///   offset of the last temporary variable. This is needed to allocate enough space on the stack to
-///   accomodate every address we use.
-///
-/// - Rewrites invalid `Mov` instructions. For example, the instruction `Mov(Stack(0), Stack(4))`
-///   should be rewritten to `Mov(Stack(0), Reg(R10))` and then `Mov(Reg(R10), Stack(4))`, since
-///   `mov`, like many other instructions, can't have memory addresses as both the source and the
-///   destination. So we make use of scratch register, specifically R10D, to do the rewriting.
-pub struct InstructionFixupPass {
-  stack_size: usize,
+pub struct InstructionFixupPass<'ctx> {
+  ctx: &'ctx mut Context,
 }
 
-impl InstructionFixupPass {
-  pub fn new(stack_size: usize) -> Self {
-    Self { stack_size }
+impl<'ctx> InstructionFixupPass<'ctx> {
+  pub fn new(ctx: &'ctx mut Context) -> Self {
+    Self { ctx }
   }
 
   pub fn run(&self, program: &Program) -> Result<Program, InstructionFixupError> {
@@ -612,16 +599,24 @@ impl InstructionFixupPass {
   }
 
   fn fixup_function(&self, function: &Function) -> Result<Function, InstructionFixupError> {
-    let mut instructions = vec![Instruction::AllocateStack(self.stack_size)];
+    if let Some(entry) = self.ctx.symtable.get(&function.name) {
+      let stack_frame_size = utils::round_away_from_zero(16, -entry.stack_frame_size);
+      let mut instructions = vec![Instruction::AllocateStack(stack_frame_size)];
 
-    for instruction in &function.instructions {
-      instructions.extend(self.fixup_instruction(instruction)?);
+      for instruction in &function.instructions {
+        let instruction = self.fixup_instruction(instruction)?;
+        instructions.extend(instruction);
+      }
+
+      Ok(Function {
+        name: function.name,
+        instructions,
+      })
+    } else {
+      Err(InstructionFixupError::new(
+        "function not found in symbol table",
+      ))
     }
-
-    Ok(Function {
-      name: function.name,
-      instructions,
-    })
   }
 
   fn fixup_instruction(

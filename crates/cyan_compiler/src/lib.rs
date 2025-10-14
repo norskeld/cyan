@@ -11,3 +11,6 @@ pub mod ir;
 pub mod lexer;
 pub mod parser;
 pub mod symbol;
+pub mod symtable;
+pub mod types;
+pub mod utils;
