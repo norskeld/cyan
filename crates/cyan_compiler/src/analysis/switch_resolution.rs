@@ -43,13 +43,27 @@ impl<'ctx> SwitchResolutionPass<'ctx> {
     self.resolve_program(program)
   }
 
+  #[inline]
+  fn enter_switch(&mut self) {
+    self.inside_switch = true;
+  }
+
+  #[inline]
+  fn exit_switch(&mut self) {
+    self.inside_switch = false;
+  }
+
   fn resolve_program(&mut self, program: &Program) -> Result<Program> {
     let mut declarations = vec![];
 
     for declaration in &program.declarations {
       if declaration.is_definition() {
         let function = self.resolve_function(declaration)?;
-        declarations.push(function);
+        declarations.push(function)
+      }
+
+      if declaration.is_declaration() {
+        declarations.push(declaration.clone());
       }
     }
 
@@ -60,10 +74,10 @@ impl<'ctx> SwitchResolutionPass<'ctx> {
   }
 
   fn resolve_function(&mut self, function: &FuncDeclaration) -> Result<FuncDeclaration> {
-    self.inside_switch = false;
-    let mut cases = CaseMap::default();
+    self.exit_switch();
+
     // NOTE: We already ensured the body is present.
-    let body = self.resolve_block(function.body.as_ref().unwrap(), &mut cases)?;
+    let body = self.resolve_block(function.body.as_ref().unwrap(), &mut CaseMap::default())?;
 
     Ok(FuncDeclaration {
       name: function.name,
@@ -74,7 +88,7 @@ impl<'ctx> SwitchResolutionPass<'ctx> {
   }
 
   fn resolve_block(&mut self, block: &Block, cases: &mut CaseMap) -> Result<Block> {
-    let mut body = Vec::with_capacity(block.body.len());
+    let mut body = vec![];
 
     for block_item in &block.body {
       body.push(self.resolve_block_item(block_item, cases)?);
@@ -133,8 +147,10 @@ impl<'ctx> SwitchResolutionPass<'ctx> {
         }))
       },
       | Statement::Switch(switch) => {
-        self.inside_switch = true;
+        self.enter_switch();
+
         let mut cases = CaseMap::default();
+
         let body = self
           .resolve_statement(&switch.body, &mut cases)
           .map(Box::new)?;
