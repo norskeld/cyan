@@ -605,9 +605,10 @@ impl<'ctx> InstructionFixupPass<'ctx> {
         instructions,
       })
     } else {
-      Err(InstructionFixupError::new(
-        "function not found in symbol table",
-      ))
+      Err(InstructionFixupError::new(format!(
+        "function {} not found in symbol table",
+        function.name
+      )))
     }
   }
 

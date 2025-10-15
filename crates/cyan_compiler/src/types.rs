@@ -1,5 +1,5 @@
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Type {
   Int,
-  Func { params_count: i32 },
+  Func { params_count: isize },
 }
