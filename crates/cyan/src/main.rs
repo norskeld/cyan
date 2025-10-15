@@ -171,17 +171,12 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
 
   let mut ctx = context::Context::new();
 
-  let mut pass = analysis::IdResolutionPass::new(&mut ctx);
-  let ast = pass.run(&ast)?;
+  let ast = analysis::IdResolutionPass::new(&mut ctx).run(&ast)?;
+  let ast = analysis::LabelsResolutionPass::new().run(ast)?;
+  let ast = analysis::LoopLabelingPass::new(&mut ctx).run(&ast)?;
+  let ast = analysis::SwitchResolutionPass::new(&mut ctx).run(&ast)?;
 
-  let mut pass = analysis::LabelsResolutionPass::new();
-  let ast = pass.run(ast)?;
-
-  let mut pass = analysis::LoopLabelingPass::new(&mut ctx);
-  let ast = pass.run(&ast)?;
-
-  let mut pass = analysis::SwitchResolutionPass::new(&mut ctx);
-  let ast = pass.run(&ast)?;
+  analysis::TypecheckPass::new(&mut ctx).run(&ast)?;
 
   if options.should_print(CompileStage::Verify) {
     println!("{}", boxed("Stage | Verify (AST)"));
@@ -207,16 +202,13 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   // Codegen:
 
   // Lower TAC to AAST.
-  let lowerer = aast::LoweringPass::new();
-  let aast = lowerer.lower(&tac)?;
+  let aast = aast::LoweringPass::new().lower(&tac)?;
 
   // Replace pseudoregisters and get the stack size.
-  let mut pass = aast::PseudoReplacementPass::new(&mut ctx);
-  let aast = pass.run(&aast)?;
+  let aast = aast::PseudoReplacementPass::new(&mut ctx).run(&aast)?;
 
   // Fix up instructions.
-  let pass = aast::InstructionFixupPass::new(&mut ctx);
-  let aast = pass.run(&aast)?;
+  let aast = aast::InstructionFixupPass::new(&mut ctx).run(&aast)?;
 
   if options.should_print(CompileStage::Codegen) {
     println!("{}", boxed("Stage | Codegen (AAST)"));
