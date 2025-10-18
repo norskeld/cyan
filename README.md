@@ -46,7 +46,7 @@ If something is missing in the list below, then it's not planned to be implement
   - [ ] Function definitions
   - [ ] Function calls
 - [ ] Types:
-  - [ ] `void`
+  - [x] `void`
   - [x] `int`
   - [ ] `long`
   - [ ] `unsigned int`
@@ -77,7 +77,10 @@ Optimizations:
 - [ ] Register allocation
 - [ ] Register coalescing
 
-Beyond that I'm also thinking about adding support for the [QBE](https://c9x.me/compile/) backend and some extensions to the language, like modules (not macros).
+Additional features:
+
+- Use the [QBE](https://c9x.me/compile/) backend.
+- Non-standard extensions to the language, like modules (not macros).
 
 ## Grammar
 
@@ -87,40 +90,87 @@ Defined using EBNF-like notation.
 <summary>Definition</summary>
 
 ```ebnf
-<program>     = <function>
-<function>    = "int" <identifier> "(" "void" ")" <block>
-<block>       = "{" { <block-item> } "}"
-<block-item>  = <declaration> | <statement>
-<declaration> = "int" <identifier> [ "=" <expression> ] ";"
-<statement>   = "return" <expression> ";"
-              | <expression> ";"
-              | <identifier> ":" <statement>
-              | "if" "(" <expression> ")" <statement> [ "else" <statement> ]
-              | "break" ";"
-              | "continue" ";"
-              | "switch" "(" <expression> ")" <statement>
-              | "while" "(" <expression> ")" <statement>
-              | "do" <statement> "while" "(" <expression> ")" ";"
-              | "for" "(" <initializer> [ <expression> ] ";" [ <expression> ] ";" [ <expression> ] ")" <statement>
-              | "goto" <identifier> ";"
-              | <block>
-              | ";"
-<initializer> = <declaration> | [ <expression> ] ";"
-<expression>  = <factor>
-              | <expression> <binary-op> <expression>
-              | <expression> "?" <expression> ":" <expression>
-<factor>      = <unary-op> <factor> | <postfix>
-<postfix>     = <primary> { <postfix-op> }
-<primary>     = <int> | <identifier> | "(" <expression> ")"
-<unary-op>    = "-" | "~" | "!" | "++" | "--"
-<postfix-op>  = "++" | "--"
-<binary-op>   = "+" | "-" | "*" | "/" | "%"
-              | "<<" | ">>" | "&" | "|" | "^"
-              | "&&" | "||" | "==" | "!=" | "<" | "<=" | ">" | ">="
-              | "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
+program
+  = { function-declaration }
 
-<identifier>  = ? An identifier token ?
-<int>         = ? A constant token ?
+declaration
+  = variable-declaration
+  | function-declaration
+
+function-declaration
+  = "int" identifier "(" param-list ")" ( block | ";" )
+
+variable-declaration
+  = "int" identifier [ "=" expression ] ";"
+
+param-list
+  = "void"
+  | "int" identifier { "," "int" identifier }
+
+block
+  = "{" { block-item } "}"
+
+block-item
+  = declaration
+  | statement
+
+statement
+  = "return" expression ";"
+  | expression ";"
+  | identifier ":" statement
+  | "if" "(" expression ")" statement [ "else" statement ]
+  | "break" ";"
+  | "continue" ";"
+  | "switch" "(" expression ")" statement
+  | "while" "(" expression ")" statement
+  | "do" statement "while" "(" expression ")" ";"
+  | "for" "(" initializer [ expression ] ";" [ expression ] ";" [ expression ] ")" statement
+  | "goto" identifier ";"
+  | <block>
+  | ";"
+
+initializer
+  = variable-declaration
+  | [ expression ] ";"
+
+expression
+  = factor
+  | expression binary-op expression
+  | expression "?" expression ":" expression
+
+factor
+  = unary-op factor
+  | postfix
+
+postfix
+  = primary { postfix-op }
+
+primary
+  = int
+  | identifier
+  | "(" expression ")"
+  | identifier "(" [ argument-list ] ")"
+
+argument-list
+  = expression { "," expression }
+
+unary-op
+  = "-" | "~" | "!" | "++" | "--"
+
+postfix-op
+  = "++" | "--"
+
+binary-op
+  = "+" | "-" | "*" | "/" | "%"
+  | "<<" | ">>" | "&" | "|" | "^"
+  | "&&" | "||" | "==" | "!=" | "<" | "<=" | ">" | ">="
+  | "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
+
+identifier
+  = ? An identifier token ?
+
+int
+  = ? A constant token ?
 ```
 </details>
 
