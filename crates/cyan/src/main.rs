@@ -201,13 +201,8 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   // -----------------------------------------------------------------------------------------------
   // Codegen:
 
-  // Lower TAC to AAST.
   let aast = aast::LoweringPass::new().lower(&tac)?;
-
-  // Replace pseudoregisters and get the stack size.
   let aast = aast::PseudoReplacementPass::new(&mut ctx).run(&aast)?;
-
-  // Fix up instructions.
   let aast = aast::InstructionFixupPass::new(&mut ctx).run(&aast)?;
 
   if options.should_print(CompileStage::Codegen) {

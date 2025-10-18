@@ -139,8 +139,11 @@ impl Parser {
 
 impl Parser {
   /// Parses a whole program.
+  ///
+  /// program
+  ///   = { function-declaration }
   fn program(&mut self) -> Result<Program> {
-    let declarations = self.declarations()?;
+    let declarations = self.func_declarations()?;
 
     let location = Location::default().merge(
       &declarations
@@ -154,23 +157,32 @@ impl Parser {
     })
   }
 
-  /// Parses top-level declarations (only function atm).
-  fn declarations(&mut self) -> Result<Vec<FuncDeclaration>> {
+  /// Parses top-level declarations.
+  ///
+  /// { function-declaration }
+  fn func_declarations(&mut self) -> Result<Vec<FuncDeclaration>> {
     let mut declarations = vec![];
 
     while self.peek(1).kind != TokenKind::Eof {
-      declarations.push(self.function()?);
+      let declaration = self.func_declaration()?;
+      declarations.push(declaration);
     }
 
     Ok(declarations)
   }
 
-  /// Parses either a function definition or a function declaration.
-  fn function(&mut self) -> Result<FuncDeclaration> {
+  /// Parses either a function definition/declaration.
+  ///
+  /// function-declaration
+  ///   = "int" identifier "(" param-list ")" ( block | ";" )
+  fn func_declaration(&mut self) -> Result<FuncDeclaration> {
     let start = self.expect(TokenKind::IntKw)?;
     let name = self.identifier()?;
+
     self.expect(TokenKind::ParenOpen)?;
+
     let params = self.params_list()?;
+
     self.expect(TokenKind::ParenClose)?;
 
     let node = if self.peek(1).kind == TokenKind::Semi {
@@ -199,38 +211,50 @@ impl Parser {
   }
 
   /// Parses a parameters list delimited by commas.
+  ///
+  /// param-list
+  ///   = "void"
+  ///   | "int" identifier { "," "int" identifier }
   fn params_list(&mut self) -> Result<Vec<Ident>> {
-    let next = self.consume()?;
+    let mut params = vec![];
 
-    if let TokenKind::VoidKw = next.kind {
-      Ok(vec![])
-    } else {
-      let mut params = vec![];
+    loop {
+      let next = self.consume()?;
 
-      loop {
-        self.expect(TokenKind::IntKw)?;
+      match next.kind {
+        | TokenKind::VoidKw => return Ok(vec![]),
+        | TokenKind::IntKw => {
+          let param = self.identifier()?;
+          let peek = self.peek(1);
 
-        let param = self.identifier()?;
-        let peek = self.peek(1);
+          params.push(param);
 
-        params.push(param);
-
-        if let TokenKind::Comma = peek.kind {
-          self.consume()?;
-        } else {
-          break;
-        }
+          if let TokenKind::Comma = peek.kind {
+            self.consume()?;
+          } else {
+            break;
+          }
+        },
+        | _ => {
+          return Err(ParseError::new(
+            format!("expected either void or int, but found {}", next.value),
+            next.location,
+          ))
+        },
       }
-
-      Ok(params)
     }
+
+    Ok(params)
   }
 
   /// Parses a block.
+  ///
+  /// block
+  ///   = "{" { block-item } "}"
   fn block(&mut self) -> Result<Block> {
-    let open = self.expect(TokenKind::BraceOpen)?;
+    let mut body = vec![];
 
-    let mut body = Vec::new();
+    let open = self.expect(TokenKind::BraceOpen)?;
 
     while self.peek(1).kind != TokenKind::BraceClose {
       body.push(self.block_item()?);
@@ -243,6 +267,10 @@ impl Parser {
   }
 
   /// Parses a block item.
+  ///
+  /// block-item
+  ///   = declaration
+  ///   | statement
   fn block_item(&mut self) -> Result<BlockItem> {
     let token = self.peek(1);
 
@@ -253,6 +281,10 @@ impl Parser {
   }
 
   /// Parses a declaration.
+  ///
+  /// declaration
+  ///   = variable-declaration
+  ///   | function-declaration
   fn declaration(&mut self) -> Result<Declaration> {
     let start = self.expect(TokenKind::IntKw)?;
     let name = self.identifier()?;
@@ -262,6 +294,7 @@ impl Parser {
       // int ident =
       | TokenKind::Assign => {
         self.consume()?;
+
         let right = self.expression(0)?;
         let end = self.expect(TokenKind::Semi)?;
         let location = start.location.merge(&end.location);
@@ -286,8 +319,11 @@ impl Parser {
       // int ident(
       | TokenKind::ParenOpen => {
         self.consume()?;
+
         let params = self.params_list()?;
+
         self.expect(TokenKind::ParenClose)?;
+
         let end = self.expect(TokenKind::Semi)?;
         let location = start.location.merge(&end.location);
 
@@ -301,7 +337,7 @@ impl Parser {
       | _ => {
         Err(ParseError::new(
           format!(
-            "expected variable of function declarations, found '{}'",
+            "expected variable or function declarations, found '{}'",
             next.value
           ),
           next.location,
@@ -311,6 +347,21 @@ impl Parser {
   }
 
   /// Parses a statement.
+  ///
+  /// statement
+  ///   = "return" expression ";"
+  ///   | expression ";"
+  ///   | identifier ":" statement
+  ///   | "if" "(" expression ")" statement [ "else" statement ]
+  ///   | "break" ";"
+  ///   | "continue" ";"
+  ///   | "switch" "(" expression ")" statement
+  ///   | "while" "(" expression ")" statement
+  ///   | "do" statement "while" "(" expression ")" ";"
+  ///   | "for" "(" initializer [ expression ] ";" [ expression ] ";" [ expression ] ")" statement
+  ///   | "goto" identifier ";"
+  ///   | <block>
+  ///   | ";"
   fn statement(&mut self) -> Result<Statement> {
     let token = self.peek(1);
 
@@ -334,6 +385,8 @@ impl Parser {
   }
 
   /// Parses a `switch` statement.
+  ///
+  /// "switch" "(" expression ")" statement
   fn statement_switch(&mut self) -> Result<Statement> {
     let token = self.consume()?;
 
@@ -761,7 +814,26 @@ impl Parser {
 
     match token.kind {
       | TokenKind::Int => self.constant(),
-      | TokenKind::Ident => self.variable(),
+      | TokenKind::Ident => {
+        let ident = self.identifier()?;
+
+        // This is function call.
+        if self.peek(1).kind == TokenKind::ParenOpen {
+          let args = self.optional_args_list()?;
+
+          let location = args
+            .last()
+            .map_or(ident.location, |it| ident.location.merge(it.location()));
+
+          Ok(Expression::FuncCall(FuncCall {
+            name: ident,
+            args,
+            location,
+          }))
+        } else {
+          Ok(Expression::Var(ident))
+        }
+      },
       | TokenKind::ParenOpen => self.group(),
       | _ => {
         Err(ParseError::new(
@@ -772,11 +844,36 @@ impl Parser {
     }
   }
 
-  /// Parses a variable.
-  fn variable(&mut self) -> Result<Expression> {
-    let ident = self.identifier()?;
+  /// `"(" [ argument-list ] ")"`
+  fn optional_args_list(&mut self) -> Result<Vec<Expression>> {
+    self.expect(TokenKind::ParenOpen)?;
 
-    Ok(Expression::Var(ident))
+    let args = match self.peek(1).kind {
+      | TokenKind::ParenClose => vec![],
+      | _ => self.args_list()?,
+    };
+
+    self.expect(TokenKind::ParenClose)?;
+
+    Ok(args)
+  }
+
+  /// `argument-list = expression { "," expression }`
+  fn args_list(&mut self) -> Result<Vec<Expression>> {
+    let mut args = vec![];
+
+    args.push(self.expression(0)?);
+
+    loop {
+      if self.peek(1).kind == TokenKind::Comma {
+        self.consume()?;
+        args.push(self.expression(0)?);
+      } else {
+        break;
+      }
+    }
+
+    Ok(args)
   }
 
   /// Parses an expression group.
@@ -2033,7 +2130,7 @@ mod tests {
 
   #[test]
   fn parse_empty_main() {
-    let actual = parser("int main(void) {}").function();
+    let actual = parser("int main(void) {}").func_declaration();
 
     let expected = FuncDeclaration {
       name: Ident {
