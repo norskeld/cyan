@@ -10,9 +10,7 @@ type Result<T> = std::result::Result<T, SwitchResolutionError>;
 #[derive(Debug, Error)]
 #[error("switch resolution error {location}: {message}")]
 pub struct SwitchResolutionError {
-  /// The error message.
   message: String,
-  /// The location of the error.
   location: Location,
 }
 
