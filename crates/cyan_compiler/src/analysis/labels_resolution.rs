@@ -10,9 +10,7 @@ type Result<T> = std::result::Result<T, LabelsResolutionError>;
 #[derive(Debug, Error)]
 #[error("labels resolution error {location}: {message}")]
 pub struct LabelsResolutionError {
-  /// The error message.
   message: String,
-  /// The location of the error.
   location: Location,
 }
 
@@ -109,7 +107,7 @@ impl LabelsResolutionPass {
       };
     }
 
-    Ok(func.clone())
+    Ok(func)
   }
 
   fn resolve_block(&mut self, block: Block) -> Result<Block> {
@@ -177,9 +175,10 @@ impl LabelsResolutionPass {
   fn resolve_if(&mut self, conditional: If) -> Result<Statement> {
     self.resolve_statement(*conditional.clone().then)?;
 
-    match conditional.otherwise {
-      | Some(otherwise) => self.resolve_statement(*otherwise),
-      | None => Ok(Statement::If(conditional)),
+    if let Some(otherwise) = conditional.clone().otherwise {
+      self.resolve_statement(*otherwise)?;
     }
+
+    Ok(Statement::If(conditional))
   }
 }
