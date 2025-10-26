@@ -41,10 +41,10 @@ If something is missing in the list below, then it's not planned to be implement
   - [x] For loops
   - [x] While loops
   - [x] Do-while loops
-- [ ] Functions:
-  - [ ] Function declarations
-  - [ ] Function definitions
-  - [ ] Function calls
+- [x] Functions:
+  - [x] Function declarations
+  - [x] Function definitions
+  - [x] Function calls
 - [ ] Types:
   - [x] `void`
   - [x] `int`
