@@ -216,7 +216,7 @@ fn compile(options: &CompileOptions) -> anyhow::Result<CompileStatus> {
   // Emission:
 
   // Emit assembly.
-  let emitter = emitter::Emitter::new();
+  let emitter = emitter::Emitter::new(&mut ctx);
   let emitted = emitter.emit(&aast);
 
   if options.should_print(CompileStage::Codegen) {
