@@ -1,8 +1,9 @@
 use std::fmt;
 
+use crate::context::Context;
 use crate::ir::aast::*;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Output {
   bytes: Vec<u8>,
 }
@@ -41,15 +42,17 @@ impl fmt::Display for Output {
 }
 
 /// Assembly emitter. Emits x86-64 assembly using AT&T syntax.
-#[derive(Debug, Default)]
-pub struct Emitter {
+#[derive(Debug)]
+pub struct Emitter<'ctx> {
   output: Output,
+  ctx: &'ctx Context,
 }
 
-impl Emitter {
-  pub fn new() -> Self {
+impl<'ctx> Emitter<'ctx> {
+  pub fn new(ctx: &'ctx Context) -> Self {
     Self {
       output: Output::new(),
+      ctx,
     }
   }
 
@@ -61,7 +64,7 @@ impl Emitter {
   }
 }
 
-impl Emitter {
+impl<'ctx> Emitter<'ctx> {
   /// Emits assembly code for the program, including platform-specific sections.
   fn emit_program(&mut self, program: &Program) {
     for definition in &program.definitions {
@@ -307,8 +310,11 @@ impl Emitter {
     if cfg!(target_os = "macos") {
       format!("_{name}")
     } else {
-      // TODO: Check if given name is present in the symbol table.
-      name.to_string()
+      if self.ctx.symtable.is_defined(name) {
+        name.to_string()
+      } else {
+        format!("{name}@PLT")
+      }
     }
   }
 

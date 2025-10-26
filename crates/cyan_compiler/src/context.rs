@@ -5,6 +5,7 @@ use crate::symtable::Symtable;
 ///
 /// This context is used to store global information about the compiler, such as the current
 /// function, the variable counter, etc.
+#[derive(Debug)]
 pub struct Context {
   /// The current function name.
   pub var_prefix: Symbol,

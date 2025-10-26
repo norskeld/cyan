@@ -2,12 +2,14 @@ use std::collections::HashMap;
 
 use crate::types::Type;
 
+#[derive(Debug)]
 pub struct SymtableEntry {
   pub typ: Type,
   pub is_defined: bool,
   pub stack_frame_size: isize,
 }
 
+#[derive(Debug)]
 pub struct Symtable {
   entries: HashMap<String, SymtableEntry>,
 }
