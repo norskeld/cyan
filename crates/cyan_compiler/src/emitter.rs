@@ -309,12 +309,10 @@ impl<'ctx> Emitter<'ctx> {
   fn gen_func_label(&self, name: &str) -> String {
     if cfg!(target_os = "macos") {
       format!("_{name}")
+    } else if self.ctx.symtable.is_defined(name) {
+      name.to_string()
     } else {
-      if self.ctx.symtable.is_defined(name) {
-        name.to_string()
-      } else {
-        format!("{name}@PLT")
-      }
+      format!("{name}@PLT")
     }
   }
 
