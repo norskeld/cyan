@@ -239,7 +239,7 @@ impl Parser {
           return Err(ParseError::new(
             format!("expected either void or int, but found {}", next.value),
             next.location,
-          ))
+          ));
         },
       }
     }
@@ -918,7 +918,7 @@ impl Parser {
         return Err(ParseError::new(
           format!("expected unary operator, found '{}'", token.value),
           token.location,
-        ))
+        ));
       },
     };
 
@@ -963,7 +963,7 @@ impl Parser {
         return Err(ParseError::new(
           format!("expected binary operator, found '{}'", token.value),
           token.location,
-        ))
+        ));
       },
     };
 

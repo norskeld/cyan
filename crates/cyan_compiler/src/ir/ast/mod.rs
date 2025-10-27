@@ -25,6 +25,10 @@ pub struct Block {
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
+#[allow(
+  clippy::large_enum_variant,
+  reason = "Infeasible to Box the statement as of now"
+)]
 pub enum BlockItem {
   Declaration(Declaration),
   Statement(Statement),
@@ -65,6 +69,10 @@ impl FuncDeclaration {
 }
 
 #[derive(Clone, Debug, Located, PartialEq, Eq)]
+#[allow(
+  clippy::large_enum_variant,
+  reason = "Infeasible to Box the statements as of now"
+)]
 pub enum Statement {
   Goto(Goto),
   Labeled(Labeled),
